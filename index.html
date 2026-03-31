@@ -70,7 +70,7 @@ canvas{max-width:100%}
   .modal-content{max-width:95vw;max-height:95vh}
   .modal-wide{max-width:95vw}
   .modal-content > div:first-child{padding:12px 16px}
-  .modal-content > div:last-child{padding:16px}
+  .modal-content > div:last-child{padding:12px}
 }
 </style>
 </head>
@@ -250,8 +250,8 @@ function Pill({val,map}){
 
 function Modal({open,onClose,title,children,wide}){
   if(!open)return null;
-  return <div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:'fixed',inset:0,background:'#000000bb',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-    <div className={`fade-up modal-content ${wide ? 'modal-wide' : 'modal-normal'}`} style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--r2)',width:'100%',display:'flex',flexDirection:'column',boxShadow:'var(--shadow)'}}>
+  return <div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:'fixed',inset:0,background:'#000000bb',zIndex:1000,padding:16}}>
+    <div className={`fade-up modal-content ${wide ? 'modal-wide' : 'modal-normal'}`} style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--r2)',width:'100%',display:'flex',flexDirection:'column',boxShadow:'var(--shadow)',position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)'}}>
       <div style={{padding:'16px 20px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
         <span style={{fontFamily:'var(--font-cond)',fontWeight:700,fontSize:17}}>{title}</span>
         <button onClick={onClose} style={{background:'none',color:'var(--text2)',fontSize:18,lineHeight:1,padding:4}}>✕</button>
