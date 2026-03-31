@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Auto-École Le Patron — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700&family=Barlow+Condensed:wght@500;600;700;800;900&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --green:#84cc16;--green-dim:#84cc1620;--green2:#65a30d;
+  --blue:#1e3a8a;--blue-dim:#1e3a8a20;--blue2:#1d4ed8;
+  --cyan:#06b6d4;--cyan-dim:#06b6d420;
+  --gold:#f59e0b;--gold-dim:#f59e0b20;
+  --red:#ef4444;--red-dim:#ef444420;
+  --violet:#8b5cf6;--violet-dim:#8b5cf620;
+  --orange:#f97316;--orange-dim:#f9731620;
+  --font:'Barlow',sans-serif;--font-cond:'Barlow Condensed',sans-serif;
+  --r:10px;--r2:16px;--shadow:0 4px 24px #00000040;
+}
+[data-theme="dark"]{
+  --bg:#07090f;--bg2:#0c0f1c;--bg3:#111827;--bg4:#1a2035;
+  --border:#1f2d47;--border2:#2d4070;
+  --text:#e5eaf3;--text2:#7a90b3;--text3:#3d5273;
+  --card-bg:#0f1527;--card-border:#1c2d4a;
+}
+[data-theme="light"]{
+  --bg:#edf2fa;--bg2:#ffffff;--bg3:#f5f8ff;--bg4:#eef3fb;
+  --border:#d5e0f0;--border2:#b0c4de;
+  --text:#1a2840;--text2:#4a6280;--text3:#9ab0ca;
+  --card-bg:#ffffff;--card-border:#d5e0f0;
+  --shadow:0 4px 24px #1e3a8a12;
+}
+html,body,#root{height:100%;background:var(--bg);overflow:hidden}
+body{font-family:var(--font);color:var(--text);font-size:14px}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+input,textarea,select{font-family:var(--font);background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:var(--r);padding:9px 13px;font-size:13px;outline:none;transition:border .2s,box-shadow .2s;width:100%}
+input:focus,textarea:focus,select:focus{border-color:var(--green);box-shadow:0 0 0 3px var(--green-dim)}
+select option{background:var(--bg3)}
+a{color:inherit;text-decoration:none}
+button{font-family:var(--font);cursor:pointer;border:none;outline:none;transition:all .18s}
+canvas{max-width:100%}
+.chart-wrap{position:relative;width:100%;height:200px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes toast{0%{opacity:0;transform:translateY(20px)}10%{opacity:1;transform:translateY(0)}90%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-10px)}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.fade-up{animation:fadeUp .3s ease both}
+.spin{animation:spin 1s linear infinite;display:inline-block}
+.live{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;display:inline-block}
+@media(max-width:768px){
+  html,body,#root{overflow:hidden}
+  .mobile-main{overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch}
+  .mobile-content{padding:10px!important}
+  table{font-size:11px}
+  table td,table th{padding:5px 6px!important;white-space:nowrap}
+  .hide-mobile{display:none!important}
+  .grid-2-mobile{grid-template-columns:1fr!important}
+  .grid-3-mobile{grid-template-columns:1fr 1fr!important}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useCallback,useRef,useMemo}=React;
+
+// ═══════════════════════════════════════════
+//  CONSTANTS
+// ═══════════════════════════════════════════
+const PIN_DIR="230189";
+const CREDS_KEY="lp_sb_v1";
+const ROLE_KEY="lp_role_v1";
+const THEME_KEY="lp_theme_v1";
+const ALERT_DAYS_KEY="lp_alert_days";
+
+const STATUTS={
+  inscrit:     {label:"Inscrit",          color:"#06b6d4",bg:"#06b6d418",icon:"📝"},
+  en_formation:{label:"En formation",     color:"#f59e0b",bg:"#f59e0b18",icon:"🎓"},
+  pret_examen: {label:"Prêt pour examen", color:"#8b5cf6",bg:"#8b5cf618",icon:"🏁"},
+  recu:        {label:"Reçu ✓",          color:"#84cc16",bg:"#84cc1618",icon:"✅"},
+  recale:      {label:"Recalé",           color:"#ef4444",bg:"#ef444418",icon:"❌"},
+};
+
+const STATUTS_PAI={
+  paye:   {label:"Payé",   color:"#84cc16",bg:"#84cc1618",icon:"✅"},
+  partiel:{label:"Partiel",color:"#f59e0b",bg:"#f59e0b18",icon:"⚠️"},
+  impaye: {label:"Impayé", color:"#ef4444",bg:"#ef444418",icon:"❌"},
+};
+
+const RESULTATS={
+  en_attente:{label:"En attente",color:"#94a3b8",bg:"#94a3b818",icon:"⏳"},
+  recu:      {label:"Reçu ✓",   color:"#84cc16",bg:"#84cc1618",icon:"✅"},
+  recale:    {label:"Recalé",   color:"#ef4444",bg:"#ef444418",icon:"❌"},
+};
+
+const CATS=["A","B","C","D","E","F"];
+const MONTHS=["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
+
+const SQL_SCRIPT=`-- Exécuter dans Supabase SQL Editor
+
+CREATE TABLE IF NOT EXISTS eleves (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  nom text NOT NULL,
+  prenom text NOT NULL,
+  telephone text,
+  email text,
+  date_naissance date,
+  adresse text,
+  photo_url text,
+  num_cni text,
+  statut text DEFAULT 'inscrit',
+  type_formation text DEFAULT 'code',
+  categorie_permis text DEFAULT 'B',
+  mode_formation text DEFAULT 'normal',
+  notes text,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS seances (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  eleve_id uuid REFERENCES eleves(id) ON DELETE CASCADE,
+  type text DEFAULT 'code',
+  date_seance date,
+  heure_debut text,
+  heure_fin text,
+  notes text,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS examens (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  eleve_id uuid REFERENCES eleves(id) ON DELETE CASCADE,
+  type text DEFAULT 'code',
+  date_examen date,
+  tentative_numero integer DEFAULT 1,
+  resultat text DEFAULT 'en_attente',
+  notes text,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS paiements (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  eleve_id uuid REFERENCES eleves(id) ON DELETE CASCADE,
+  montant_total integer DEFAULT 0,
+  acompte integer DEFAULT 0,
+  solde integer DEFAULT 0,
+  statut text DEFAULT 'impaye',
+  notes text,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Activer RLS (optionnel mais recommandé)
+ALTER TABLE eleves ENABLE ROW LEVEL SECURITY;
+ALTER TABLE seances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE examens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE paiements ENABLE ROW LEVEL SECURITY;
+
+-- Politique publique pour test (remplacer par auth en production)
+CREATE POLICY "public_access" ON eleves FOR ALL USING (true);
+CREATE POLICY "public_access" ON seances FOR ALL USING (true);
+CREATE POLICY "public_access" ON examens FOR ALL USING (true);
+CREATE POLICY "public_access" ON paiements FOR ALL USING (true);`;
+
+// ═══════════════════════════════════════════
+//  SUPABASE HELPER
+// ═══════════════════════════════════════════
+const SB={
+  client:null,
+  init(u,k){this.client=supabase.createClient(u,k);},
+  async getAll(t){
+    const{data,error}=await this.client.from(t).select('*').order('created_at',{ascending:false});
+    if(error)throw error;return data||[];
+  },
+  async insert(t,row){
+    const{data,error}=await this.client.from(t).insert([{...row,created_at:new Date().toISOString()}]).select().single();
+    if(error)throw error;return data;
+  },
+  async update(t,id,up){
+    const{data,error}=await this.client.from(t).update(up).eq('id',id).select().single();
+    if(error)throw error;return data;
+  },
+  async remove(t,id){
+    const{error}=await this.client.from(t).delete().eq('id',id);
+    if(error)throw error;
+  }
+};
+
+// ═══════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════
+const uid=()=>Math.random().toString(36).slice(2);
+const getCreds=()=>{try{return JSON.parse(localStorage.getItem(CREDS_KEY));}catch{return null;}};
+const saveCreds=(u,k)=>localStorage.setItem(CREDS_KEY,JSON.stringify({u,k}));
+const clearCreds=()=>localStorage.removeItem(CREDS_KEY);
+const getRole=()=>localStorage.getItem(ROLE_KEY)||null;
+const saveRole=(r)=>localStorage.setItem(ROLE_KEY,r);
+const getTheme=()=>localStorage.getItem(THEME_KEY)||'dark';
+const saveTheme=(t)=>localStorage.setItem(THEME_KEY,t);
+const getAlertDays=()=>parseInt(localStorage.getItem(ALERT_DAYS_KEY)||'7');
+const saveAlertDays=(d)=>localStorage.setItem(ALERT_DAYS_KEY,String(d));
+const fmtDate=(d)=>d?new Date(d).toLocaleDateString('fr-FR'):'—';
+const fmtMoney=(n)=>n?Number(n).toLocaleString('fr-FR')+' FCFA':'0 FCFA';
+const daysUntil=(d)=>{if(!d)return 9999;const diff=new Date(d)-new Date();return Math.ceil(diff/(1000*60*60*24));};
+
+// ═══════════════════════════════════════════
+//  SMALL COMPONENTS
+// ═══════════════════════════════════════════
+function Toast({toasts}){
+  return <div style={{position:'fixed',bottom:24,right:24,zIndex:9999,display:'flex',flexDirection:'column',gap:8,pointerEvents:'none'}}>
+    {toasts.map(t=>(
+      <div key={t.id} style={{animation:'toast 3.5s ease forwards',background:t.type==='error'?'#ef444420':'#84cc1620',border:`1px solid ${t.type==='error'?'#ef4444':'#84cc16'}`,borderRadius:'var(--r)',padding:'10px 16px',fontSize:13,color:'var(--text)',backdropFilter:'blur(8px)',minWidth:240,maxWidth:340}}>
+        {t.msg}
+      </div>
+    ))}
+  </div>;
+}
+
+function SyncDot({syncing,err,onRefresh}){
+  return <button onClick={onRefresh} title="Actualiser" style={{background:'none',display:'flex',alignItems:'center',gap:6,color:err?'var(--red)':syncing?'var(--gold)':'var(--green)',fontSize:11,padding:'4px 8px',borderRadius:6,border:`1px solid ${err?'var(--red)':syncing?'var(--gold)':'var(--border)'}`,cursor:'pointer'}}>
+    {syncing?<span className="spin" style={{fontSize:12}}>↻</span>:<span className="live"/>}
+    {syncing?'Sync...':err?'Erreur':'Sync'}
+  </button>;
+}
+
+function Badge({val,color,bg}){
+  if(!val)return null;
+  return <span style={{background:bg||'var(--green-dim)',color:color||'var(--green)',borderRadius:20,fontSize:10,fontWeight:700,padding:'2px 8px'}}>{val}</span>;
+}
+
+function Pill({val,map}){
+  if(!val||!map[val])return <span style={{color:'var(--text3)'}}>—</span>;
+  const s=map[val];
+  return <span style={{background:s.bg,color:s.color,borderRadius:20,fontSize:11,fontWeight:600,padding:'3px 10px',whiteSpace:'nowrap'}}>{s.icon} {s.label}</span>;
+}
+
+function Modal({open,onClose,title,children,wide}){
+  if(!open)return null;
+  return <div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:'fixed',inset:0,background:'#000000bb',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+    <div className="fade-up" style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--r2)',width:'100%',maxWidth:wide?760:520,maxHeight:'90vh',display:'flex',flexDirection:'column',boxShadow:'var(--shadow)'}}>
+      <div style={{padding:'16px 20px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+        <span style={{fontFamily:'var(--font-cond)',fontWeight:700,fontSize:17}}>{title}</span>
+        <button onClick={onClose} style={{background:'none',color:'var(--text2)',fontSize:18,lineHeight:1,padding:4}}>✕</button>
+      </div>
+      <div style={{overflowY:'auto',padding:20,flex:1}}>{children}</div>
+    </div>
+  </div>;
+}
+
+function Confirm({open,msg,onOk,onCancel}){
+  if(!open)return null;
+  return <div style={{position:'fixed',inset:0,background:'#000000bb',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+    <div className="fade-up" style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--r2)',padding:24,width:'100%',maxWidth:340,textAlign:'center'}}>
+      <div style={{fontSize:32,marginBottom:12}}>⚠️</div>
+      <p style={{marginBottom:20,color:'var(--text2)',lineHeight:1.5}}>{msg}</p>
+      <div style={{display:'flex',gap:10,justifyContent:'center'}}>
+        <button onClick={onCancel} style={{background:'var(--bg3)',color:'var(--text2)',border:'1px solid var(--border)',borderRadius:'var(--r)',padding:'8px 20px',fontFamily:'var(--font)'}}>Annuler</button>
+        <button onClick={onOk} style={{background:'var(--red)',color:'#fff',borderRadius:'var(--r)',padding:'8px 20px',fontFamily:'var(--font)',fontWeight:600}}>Supprimer</button>
+      </div>
+    </div>
+  </div>;
+}
+
+function Input({label,required,...props}){
+  return <div>
+    <label style={{display:'block',fontSize:11,color:'var(--text2)',marginBottom:5,fontWeight:600,letterSpacing:.3,textTransform:'uppercase'}}>{label}{required&&<span style={{color:'var(--red)',marginLeft:2}}>*</span>}</label>
+    <input {...props}/>
+  </div>;
+}
+
+function Select2({label,required,children,...props}){
+  return <div>
+    <label style={{display:'block',fontSize:11,color:'var(--text2)',marginBottom:5,fontWeight:600,letterSpacing:.3,textTransform:'uppercase'}}>{label}{required&&<span style={{color:'var(--red)',marginLeft:2}}>*</span>}</label>
+    <select {...props}>{children}</select>
+  </div>;
+}
+
+function BtnPrimary({children,loading,...props}){
+  return <button disabled={loading} {...props} style={{background:'linear-gradient(135deg,var(--green),var(--green2))',color:'#fff',borderRadius:'var(--r)',padding:'10px 22px',fontWeight:700,fontSize:13,fontFamily:'var(--font)',opacity:loading?.7:1,...(props.style||{})}}>
+    {loading?<span className="spin">↻</span>:children}
+  </button>;
+}
+
+function StatCard({icon,label,value,color,sub}){
+  return <div className="fade-up" style={{background:'var(--card-bg)',border:'1px solid var(--card-border)',borderRadius:'var(--r2)',padding:'18px 20px',position:'relative',overflow:'hidden'}}>
+    <div style={{position:'absolute',top:-10,right:-10,fontSize:56,opacity:.06}}>{icon}</div>
+    <div style={{fontSize:26,marginBottom:4}}>{icon}</div>
+    <div style={{fontFamily:'var(--font-cond)',fontSize:30,fontWeight:800,color:color||'var(--text)',lineHeight:1}}>{value}</div>
+    <div style={{fontSize:12,color:'var(--text2)',marginTop:4,fontWeight:600}}>{label}</div>
+    {sub&&<div style={{fontSize:11,color:color||'var(--text3)',marginTop:4}}>{sub}</div>}
+  </div>;
+}
+
+// ═══════════════════════════════════════════
+//  SETUP SCREEN
+// ═══════════════════════════════════════════
+function SetupScreen({onConnected}){
+  const[url,setUrl]=useState('');
+  const[key,setKey]=useState('');
+  const[err,setErr]=useState('');
+  const[loading,setLoading]=useState(false);
+
+  const handleConnect=async()=>{
+    if(!url.trim()||!key.trim()){setErr('Veuillez remplir les deux champs.');return;}
+    setLoading(true);setErr('');
+    try{
+      SB.init(url.trim(),key.trim());
+      await SB.getAll('eleves');
+      saveCreds(url.trim(),key.trim());
+      onConnected();
+    }catch(e){
+      setErr('Connexion échouée. Vérifiez votre URL et votre clé Supabase.');
+    }finally{setLoading(false);}
+  };
+
+  return <div style={{height:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg)',padding:20}}>
+    <div className="fade-up" style={{width:'100%',maxWidth:440,background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--r2)',padding:32,boxShadow:'var(--shadow)'}}>
+      <div style={{textAlign:'center',marginBottom:28}}>
+        <div style={{fontFamily:'var(--font-cond)',fontWeight:900,fontSize:26,letterSpacing:1,color:'var(--green)'}}>🚗 LE PATRON</div>
+        <div style={{fontSize:12,color:'var(--text3)',marginTop:4,fontFamily:'var(--font-cond)',letterSpacing:2,textTransform:'uppercase'}}>Auto-École · Dashboard</div>
+      </div>
+      <div style={{marginBottom:16,padding:'12px 16px',background:'var(--blue-dim)',border:'1px solid var(--blue)',borderRadius:'var(--r)',fontSize:12,color:'var(--text2)',lineHeight:1.6}}>
+        🔗 Connectez votre base de données Supabase pour commencer.
+      </div>
+      <div style={{display:'flex',flexDirection:'column',gap:14}}>
+        <Input label="URL Supabase" placeholder="https://xxxx.supabase.co" value={url} onChange={e=>setUrl(e.target.value)}/>
+        <Input label="Clé Publique (anon key)" placeholder="eyJhbGciOiJIUzI1Ni..." value={key} onChange={e=>setKey(e.target.value)} type="password"/>
+        {err&&<div style={{fontSize:12,color:'var(--red)',padding:'8px 12px',background:'var(--red-dim)',border:'1px solid var(--red)',borderRadius:'var(--r)'}}>{err}</div>}
+        <BtnPrimary loading={loading} onClick={handleConnect} style={{width:'100%',marginTop:4}}>
+          {loading?'Connexion en cours...':'Se connecter à Supabase'}
+        </BtnPrimary>
+      </div>
+    </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════
+//  ROLE SCREEN
+// ═══════════════════════════════════════════
+function RoleScreen({onRole}){
+  const[showPin,setShowPin]=useState(false);
+  const[pin,setPin]=useState('');
+  const[pinErr,setPinErr]=useState(false);
+  const[shake,setShake]=useState(false);
+  const pinRef=useRef(null);
+
+  const checkPin=()=>{
+    if(pin===PIN_DIR){setShowPin(false);onRole('directeur');}
+    else{setPinErr(true);setShake(true);setPin('');setTimeout(()=>setShake(false),500);}
+  };
+
+  useEffect(()=>{if(showPin&&pinRef.current)pinRef.current.focus();},[showPin]);
+
+  return <div style={{height:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg)',padding:20}}>
+    <div className="fade-up" style={{width:'100%',maxWidth:420,textAlign:'center'}}>
+      <div style={{marginBottom:32}}>
+        <div style={{fontFamily:'var(--font-cond)',fontWeight:900,fontSize:32,letterSpacing:1,color:'var(--green)'}}>🚗 LE PATRON</div>
+        <div style={{fontSize:12,color:'var(--text3)',marginTop:4,fontFamily:'var(--font-cond)',letterSpacing:2,textTransform:'uppercase'}}>Auto-École · Choisir un profil</div>
+      </div>
+      {!showPin?(
+        <div style={{display:'flex',gap:16,justifyContent:'center'}}>
+          {/* Moniteur */}
+          <button onClick={()=>onRole('moniteur')} style={{flex:1,background:'var(--bg2)',border:'2px solid var(--border)',borderRadius:'var(--r2)',padding:'32px 20px',cursor:'pointer',transition:'all .2s',color:'var(--text)'}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--cyan)';e.currentTarget.style.boxShadow='0 0 24px var(--cyan-dim)'}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.boxShadow='none'}}>
+            <div style={{fontSize:40,marginBottom:12}}>👨‍🏫</div>
+            <div style={{fontFamily:'var(--font-cond)',fontWeight:800,fontSize:20,letterSpacing:.5}}>MONITEUR</div>
+            <div style={{fontSize:11,color:'var(--text3)',marginTop:8,lineHeight:1.5}}>Gestion élèves & planning</div>
+          </button>
+          {/* Directeur */}
+          <button onClick={()=>{setShowPin(true);setPinErr(false);setPin('');}} style={{flex:1,background:'linear-gradient(135deg,var(--bg2),var(--bg4))',border:'2px solid var(--green)',borderRadius:'var(--r2)',padding:'32px 20px',cursor:'pointer',transition:'all .2s',color:'var(--text)',boxShadow:'0 0 20px var(--green-dim)'}}
+            onMouseEnter={e=>{e.currentTarget.style.boxShadow='0 0 32px var(--green-dim)'}}
+            onMouseLeave={e=>{e.currentTarget.style.boxShadow='0 0 20px var(--green-dim)'}}>
+            <div style={{fontSize:40,marginBottom:12}}>👔</div>
+            <div style={{fontFamily:'var(--font-cond)',fontWeight:800,fontSize:20,letterSpacing:.5,color:'var(--green)'}}>DIRECTEUR</div>
+            <div style={{fontSize:11,color:'var(--text3)',marginTop:8,lineHeight:1.5}}>Accès complet · Code requis</div>
+          </button>
+        </div>
+      ):(
+        <div style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--r2)',padding:32,animation:shake?'shake .4s ease':undefined}}>
+          <div style={{fontSize:32,marginBottom:12}}>🔐</div>
+          <div style={{fontFamily:'var(--font-cond)',fontWeight:700,fontSize:18,marginBottom:4}}>CODE DIRECTEUR</div>
+          <div style={{fontSize:12,color:'var(--text3)',marginBottom:20}}>Entrez votre code à 6 chiffres</div>
+          <input ref={pinRef} type="password" maxLength={6} value={pin} onChange={e=>{setPin(e.target.value.replace(/\D/g,''));setPinErr(false);}}
+            onKeyDown={e=>e.key==='Enter'&&checkPin()}
+            style={{textAlign:'center',fontSize:28,letterSpacing:12,fontFamily:'monospace',background:'var(--bg3)',border:`2px solid ${pinErr?'var(--red)':'var(--border)'}`,borderRadius:'var(--r)',padding:'12px 20px',width:'100%',color:'var(--text)'}}
+            placeholder="●●●●●●"/>
+          {pinErr&&<div style={{fontSize:12,color:'var(--red)',marginTop:8}}>Code incorrect. Veuillez réessayer.</div>}
+          <div style={{display:'flex',gap:10,marginTop:16}}>
+            <button onClick={()=>setShowPin(false)} style={{flex:1,background:'var(--bg3)',color:'var(--text2)',border:'1px solid var(--border)',borderRadius:'var(--r)',padding:'10px',fontFamily:'var(--font)',fontSize:13}}>Retour</button>
+            <button onClick={checkPin} style={{flex:1,background:'linear-gradient(135deg,var(--green),var(--green2))',color:'#fff',borderRadius:'var(--r)',padding:'10px',fontWeight:700,fontSize:13,fontFamily:'var(--font)'}}>Valider</button>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════
+//  TAB DASHBOARD
+// ═══════════════════════════════════════════
+function TabDashboard({eleves,examens,paiements,setTab,isMobile,role}){
+  const inscChart=useRef(null);const statutChart=useRef(null);
+  const ci=useRef(null);const cs=useRef(null);
+  const theme=document.documentElement.getAttribute('data-theme');
+
+  const total=eleves.length;
+  const ce_mois=eleves.filter(e=>{const d=new Date(e.created_at);const n=new Date();return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear();}).length;
+  const prets=eleves.filter(e=>e.statut==='pret_examen').length;
+  const recus=eleves.filter(e=>e.statut==='recu').length;
+  const recales=eleves.filter(e=>e.statut==='recale').length;
+  const impayes=paiements.filter(p=>p.statut==='impaye'||p.statut==='partiel').length;
+  const alertDays=getAlertDays();
+  const prochains=examens.filter(e=>e.resultat==='en_attente'&&daysUntil(e.date_examen)<=alertDays&&daysUntil(e.date_examen)>=0).length;
+
+  // inscriptions par mois (12 derniers mois)
+  const insByMonth=useMemo(()=>{
+    const arr=new Array(12).fill(0);
+    const now=new Date();
+    eleves.forEach(e=>{
+      const d=new Date(e.created_at);
+      const diff=(now.getFullYear()-d.getFullYear())*12+(now.getMonth()-d.getMonth());
+      if(diff>=0&&diff<12)arr[11-diff]++;
+    });
+    return arr;
+  },[eleves]);
+
+  const monthLabels=useMemo(()=>{
+    const now=new Date();
+    return Array.from({length:12},(_,i)=>{
+      const d=new Date(now.getFullYear(),now.getMonth()-11+i,1);
+      return MONTHS[d.getMonth()];
+    });
+  },[]);
+
+  const gdColor=theme==='light'?'rgba(132,204,22,.8)':'rgba(132,204,22,1)';
+
+  useEffect(()=>{
+    if(!inscChart.current)return;
+    if(ci.current)ci.current.destroy();
+    ci.current=new Chart(inscChart.current,{type:'bar',data:{labels:monthLabels,datasets:[{label:'Inscriptions',data:insByMonth,backgroundColor:gdColor,borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{color:'#7a90b3',stepSize:1,font:{size:10}},grid:{color:'#1f2d4730'}},x:{ticks:{color:'#7a90b3',font:{size:10}},grid:{display:false}}}}});
+    return()=>{if(ci.current)ci.current.destroy();};
+  },[insByMonth,theme]);
+
+  const statutCounts=useMemo(()=>Object.keys(STATUTS).map(k=>eleves.filter(e=>e.statut===k).length),[eleves]);
+
+  useEffect(()=>{
+    if(!statutChart.current)return;
+    if(cs.current)cs.current.destroy();
+    const colors=Object.values(STATUTS).map(s=>s.color);
+    const labels=Object.values(STATUTS).map(s=>s.label);
+    cs.current=new Chart(statutChart.current,{type:'doughnut',data:{labels,datasets:[{data:statutCounts,backgroundColor:colors.map(c=>c+'aa'),borderColor:colors,borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#7a90b3',font:{size:11},padding:12,boxWidth:12}}},cutout:'65%'}});
+    return()=>{if(cs.current)cs.current.destroy();};
+  },[statutCounts,theme]);
+
+  const recent=eleves.slice(0,5);
+  const prochEx=examens.filter(e=>e.resultat==='en_attente'&&daysUntil(e.date_examen)>=0).sort((a,b)=>new Date(a.date_examen)-new Date(b.date_examen)).slice(0,5);
+
+  return <div className="fade-up">
+    {/* KPI Cards */}
+    <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr 1fr':'repeat(4,1fr)',gap:14,marginBottom:20}} className="grid-3-mobile">
+      <StatCard icon="🎓" label="Total élèves" value={total} color="var(--cyan)"/>
+      <StatCard icon="📝" label="Inscrits ce mois" value={ce_mois} color="var(--green)" sub="+inscriptions"/>
+      <StatCard icon="🏁" label="Prêts pour examen" value={prets} color="var(--violet)"/>
+      <StatCard icon="✅" label="Reçus" value={recus} color="var(--green)" sub={`${recales} recalé(s)`}/>
+    </div>
+
+    {role==='directeur'&&<div style={{display:'grid',gridTemplateColumns:isMobile?'1fr 1fr':'repeat(3,1fr)',gap:14,marginBottom:20}}>
+      <StatCard icon="⚠️" label="Paiements en retard" value={impayes} color="var(--red)"/>
+      <StatCard icon="📅" label={`Examens dans ${alertDays}j`} value={prochains} color="var(--gold)"/>
+      <StatCard icon="💰" label="Total inscrits" value={total} color="var(--blue2)"/>
+    </div>}
+
+    {/* Charts */}
+    <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'1fr 1fr',gap:16,marginBottom:20}} className="grid-2-mobile">
+      <div style={{background:'var(--card-bg)',border:'1px solid var(--card-border)',borderRadius:'var(--r2)',padding:18}}>
+        <div style={{fontFamily:'var(--font-cond)',fontWeight:700,fontSize:14,marginBottom:14,color:'var(--text2)'}}>📈 INSCRIPTIONS (12 MOIS)</div>
+        <div className="chart-wrap"><canvas ref={inscChart}/></div>
+      </div>
+      <div style={{background:'var(--card-bg)',border:'1px solid var(--card-border)',borderRadius:'var(--r2)',padding:18}}>
+        <div style={{fontFamily:'var(--font-cond)',fontWeight:700,fontSize:14,marginBottom:14,color:'var(--text2)'}}>📊 STATUTS ÉLÈVES</div>
+        <div className="chart-wrap"><canvas ref={statutChart}/></div>
+      </div>
+    </div>
+
+    {/* Tables bottom */}
+    <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'1fr 1fr',gap:16}} className="grid-2-mobile">
+      {/* Recent */}
+      <div style={{background:'var(--card-bg)',border:'1px solid var(--card-border)',borderRadius:'var(--r2)',padding:16}}>
+        <div style={{fontFamily:'var(--font-cond)',fontWeight:700,fontSize:14,marginBottom:12,color:'var(--text2)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <span>🆕 DERNIERS INSCRITS</span>
+          <button onClick={()=>setTab('eleves')} style={{background:'var(--green-dim)',color:'var(--green)',border:'none',borderRadius:6,fontSize:11,padding:'3px 8px',cursor:'pointer',fontWeight:600}}>Voir tout</button>
+        </div>
+        {recent.length===0?<p style={{color:'var(--text3)',fontSize:12}}>Aucun élève pour l'instant.</p>:
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {recent.map(e=>(
+            <div key={e.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 12px',background:'var(--bg3)',borderRadius:'var(--r)',fontSize:12}}>
+              <div>
+                <span style={{fontWeight:600}}>{e.prenom} {e.nom}</span>
+                <span style={{color:'var(--text3)',marginLeft:8}}>Catég. {e.categorie_permis}</span>
+              </div>
+              <Pill val={e.statut} map={STATUTS}/>
+            </div>
+          ))}
+        </div>}
+      </div>
+      {/* Upcoming exams */}
+      <div style={{background:'var(--card-bg)',border:'1px solid var(--card-border)',borderRadius:'var(--r2)',padding:16}}>
+        <div style={{fontFamily:'var(--font-cond)',fontWeight:700,fontSize:14,marginBottom:12,color:'var(--text2)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <span>🏁 PROCHAINS EXAMENS</span>
+          <button onClick={()=>setTab('examens')} style={{background:'var(--violet-dim)',color:'var(--violet)',border:'none',borderRadius:6,fontSize:11,padding:'3px 8px',cursor:'pointer',fontWeight:600}}>Voir tout</button>
+        </div>
+        {prochEx.length===0?<p style={{color:'var(--text3)',fontSize:12}}>Aucun examen prévu.</p>:
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {prochEx.map(ex=>{
+            const el=eleves.find(e=>e.id===ex.eleve_id);
+            const days=daysUntil(ex.date_examen);
+            return <div key={ex.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 12px',background:'var(--bg3)',borderRadius:'var(--r)',fontSize:12}}>
+              <div>
+                <span style={{fontWeight:600}}>{el?`${el.prenom} ${el.nom}`:'—'}</span>
+                <span style={{color:'var(--text3)',marginLeft:8}}>{ex.type==='code'?'Code':'Conduite'}</span>
+              </div>
+              <span style={{color:days<=3?'var(--red)':days<=7?'var(--gold)':'var(--green)',fontWeight:700,fontSize:11}}>
+                {days===0?'Aujourd\'hui':days===1?'Demain':`J-${days}`}
+              </span>
+            </div>;
+          })}
+        </div>}
+      </div>
+    </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════
+//  TAB ELEVES
+// ═══════════════════════════════════════════
+const ELEVE_INIT={nom:'',prenom:'',telephone:'',email:'',date_naissance:'',adresse:'',photo_url:'',num_cni:'',statut:'inscrit',type_formation:'code',categorie_permis:'B',mode_formation:'normal',notes:''};
+
+function TabEleves({eleves,setEleves,addToast,setSyncing,setSyncErr,isMobile}){
+  const[search,setSearch]=useState('');
+  const[fStatut,setFStatut]=useState('');
+  const[fCat,setFCat]=useState('');
+  const[modal,setModal]=useState({open:false,mode:'add',item:null});
+  const[form,setForm]=useState(ELEVE_INIT);
+  const[loading,setLoading]=useState(false);
+  const[confirm,setConfirm]=useState({open:false,id:null});
+
+  const filtered=useMemo(()=>{
+    let r=eleves;
+    if(search)r=r.filter(e=>`${e.nom} ${e.prenom} ${e.telephone||''} ${e.num_cni||''}`.toLowerCase().includes(search.toLowerCase()));
+    if(fStatut)r=r.filter(e=>e.statut===fStatut);
+    if(fCat)r=r.filter(e=>e.categorie_permis===fCat);
+    return r;
+  },[eleves,search,fStatut,fCat]);
+
+  const openAdd=()=>{setForm(ELEVE_INIT);setModal({open:true,mode:'add',item:null});};
+  const openEdit=(item)=>{setForm({...ELEVE_INIT,...item});setModal({open:true,mode:'edit',item});};
+
+  const upd=(k,v)=>setForm(f=>({...f,[k]:v}));
+
+  const handleSubmit=async()=>{
+    if(!form.nom.trim()||!form.prenom.trim()){addToast('Nom et prénom sont requis.','error');return;}
+    setLoading(true);setSyncing(true);setSyncErr(false);
+    try{
+      if(modal.mode==='add'){
+        const d=await SB.insert('eleves',form);
+        setEleves(prev=>[d,...prev]);
+        addToast('✅ Élève ajouté avec succès !');
+      } else {
+        const d=await SB.update('eleves',modal.item.id,form);
+        setEleves(prev=>prev.map(e=>e.id===d.id?d:e));
+        addToast('✅ Élève mis à jour !');
+      }
+      setModal({open:false,mode:'add',item:null});
+    }catch(e){setSyncErr(true);addToast('❌ Erreur Supabase.','error');}
+    finally{setLoading(false);setSyncing(false);}
+  };
+
+  const handleDelete=async()=>{
+    if(!confirm.id)return;
+    setLoading(true);setSyncing(true);setSyncErr(false);
+    try{
+      await SB.remove('eleves',confirm.id);
+      setEleves(prev=>prev.filter(e=>e.id!==confirm.id));
+      addToast('🗑️ Élève supprimé.');
+    }catch{setSyncErr(true);addToast('❌ Erreur Supabase.','error');}
+    finally{setLoading(false);setSyncing(false);setConfirm({open:false,id:null});}
+  };
+
+  return <div className="fade-up">
+    <Confirm open={confirm.open} msg="Supprimer cet élève ? Cette action est irréversible." onOk={handleDelete} onCancel={()=>setConfirm({open:false,id:null})}/>
+    {/* Header */}
+    <div style={{display:'flex',gap:10,marginBottom:16,flexWrap:'wrap',alignItems:'center'}}>
+      <input placeholder="🔍 Rechercher un élève..." value={search} onChange={e=>setSearch(e.target.value)} style={{flex:'1 1 180px',minWidth:0}}/>
+      <select value={fStatut} onChange={e=>setFStatut(e.target.value)} style={{width:'auto',flex:'0 0 160px'}}>
+        <option value="">Tous les statuts</option>
+        {Object.entries(STATUTS).map(([k,v])=><option key={k} value={k}>{v.icon} {v.label}</option>)}
+      </select>
+      <select value={fCat} onChange={e=>setFCat(e.target.value)} style={{width:'auto',flex:'0 0 130px'}}>
+        <option value="">Toutes catég.</option>
+        {CATS.map(c=><option key={c} value={c}>Catégorie {c}</option>)}
+      </select>
+      <BtnPrimary onClick={openAdd} style={{whiteSpace:'nowrap'}}>+ Nouvel élève</BtnPrimary>
+    </div>
+
+    {/* Stats bar */}
+    <div style={{display:'flex',gap:10,marginBottom:14,flexWrap:'wrap'}}>
+      {Object.entries(STATUTS).map(([k,v])=>{
+        const cnt=eleves.filter(e=>e.statut===k).length;
+        if(!cnt)return null;
+        return <span key={k} style={{background:v.bg,color:v.color,borderRadius:20,fontSize:11,fontWeight:600,padding:'3px 12px'}}>{v.icon} {v.label}: {cnt}</span>;
+      })}
+    </div>
+
+    {/* Table */}
+    <div style={{background:'var(--card-bg)',border:'1px solid var(--card-border)',borderRadius:'var(--r2)',overflow:'hidden'}}>
+      <div style={{overflowX:'auto'}}>
+        <table style={{width:'100%',borderCollapse:'collapse'}}>
+          <thead>
+            <tr style={{background:'var(--bg3)'}}>
+              {['Élève','Téléphone','Catég.','Formation','Mode','Statut','Actions'].map(h=>(
+                <th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:11,color:'var(--text3)',fontWeight:700,letterSpacing:.5,textTransform:'uppercase',borderBottom:'1px solid var(--border)',whiteSpace:'nowrap'}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length===0?(
+              <tr><td colSpan={7} style={{padding:32,textAlign:'center',color:'var(--text3)',fontSize:13}}>Aucun élève trouvé.</td></tr>
+            ):filtered.map((e,i)=>(
+              <tr key={e.id} style={{borderBottom:'1px solid var(--border)',background:i%2===0?'transparent':'var(--bg3)30',transition:'background .15s'}}
+                onMouseEnter={ev=>ev.currentTarget.style.background='var(--green-dim)'}
+                onMouseLeave={ev=>ev.currentTarget.style.background=i%2===0?'transparent':'var(--bg3)30'}>
+                <td style={{padding:'10px 14px'}}>
+                  <div style={{fontWeight:600,fontSize:13}}>{e.prenom} {e.nom}</div>
+                  <div style={{fontSize:11,color:'var(--text3)'}}>{e.email||e.num_cni||'—'}</div>
+                </td>
+                <td style={{padding:'10px 14px',color:'var(--text2)',fontSize:12}}>{e.telephone||'—'}</td>
+                <td style={{padding:'10px 14px'}}><span style={{background:'var(--blue-dim)',color:'var(--blue2)',borderRadius:20,fontSize:11,fontWeight:700,padding:'2px 10px'}}>Cat. {e.categorie_permis}</span></td>
+                <td style={{padding:'10px 14px',fontSize:12,color:'var(--text2)'}}>{e.type_formation==='les_deux'?'Code + Conduite':e.type_formation==='code'?'Code':'Conduite'}</td>
+                <td style={{padding:'10px 14px',fontSize:12}}><span style={{color:e.mode_formation==='accelere'?'var(--orange)':'var(--cyan)'}}>{e.mode_formation==='accelere'?'⚡ Accéléré':'🕐 Normal'}</span></td>
+                <td style={{padding:'10px 14px'}}><Pill val={e.statut} map={STATUTS}/></td>
+                <td style={{padding:'10px 14px'}}>
+                  <div style={{display:'flex',gap:6}}>
+                    <button onClick={()=>openEdit(e)} style={{background:'var(--cyan-dim)',color:'var(--cyan)',border:'none',borderRadius:6,padding:'5px 10px',fontSize:11,cursor:'pointer',fontWeight:600}}>✏️ Modifier</button>
+                    <button onClick={()=>setConfirm({open:true,id:e.id})} style={{background:'var(--red-dim)',color:'var(--red)',border:'none',borderRadius:6,padding:'5px 10px',fontSize:11,cursor:'pointer',fontWeight:600}} className="hide-mobile">🗑️</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div style={{fontSize:11,color:'var(--text3)',marginTop:8}}>{filtered.length} élève(s) affiché(s) sur {eleves.length}</div>
+
+    {/* Modal */}
+    <Modal open={modal.open} onClose={()=>setModal(m=>({...m,open:false}))} title={modal.mode==='add'?'➕ Nouvel élève':'✏️ Modifier l\'élève'} wide>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}} className="grid-2-mobile">
+        <Input label="Nom" required value={form.nom} onChange={e=>upd('nom',e.target.value)}/>
+        <Input label="Prénom" required value={form.prenom} onChange={e=>upd('prenom',e.target.value)}/>
+        <Input label="Téléphone" value={form.telephone} onChange={e=>upd('telephone',e.target.value)} placeholder="+228..."/>
+        <Input label="Email" value={form.email} onChange={e=>upd('email',e.target.value)} type="email"/>
+        <Input label="Date de naissance" value={form.date_naissance} onChange={e=>upd('date_naissance',e.target.value)} type="date"/>
+        <Input label="N° CNI" value={form.num_cni} onChange={e=>upd('num_cni',e.target.value)}/>
+      </div>
+      <div style={{marginTop:14}}>
+        <Input label="Adresse" value={form.adresse} onChange={e=>upd('adresse',e.target.value)} placeholder="Quartier, Ville..."/>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:14,marginTop:14}} className="grid-3-mobile">
+        <Select2 label="Type de formation" value={form.type_formation} onChange={e=>upd('type_formation',e.target.value)}>
+          <option value="code">Code uniquement</option>
+          <option value="conduite">Conduite uniquement</option>
+          <option value="les_deux">Code + Conduite</option>
+        </Select2>
+        <Select2 label="Catégorie permis" value={form.categorie_permis} onChange={e=>upd('categorie_permis',e.target.value)}>
+          {CATS.map(c=><option key={c} value={c}>Catégorie {c}</option>)}
+        </Select2>
+        <Select2 label="Mode formation" value={form.mode_formation} onChange={e=>upd('mode_formation',e.target.value)}>
+          <option value="normal">Normal</option>
+          <option value="accelere">⚡ Accéléré</option>
+        </Select2>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginTop:14}} className="grid-2-mobile">
+        <Select2 label="Statut" value={form.statut} onChange={e=>upd('statut',e.target.value)}>
+          {Object.entries(STATUTS).map(([k,v])=><option key={k} value={k}>{v.icon} {v.label}</option>)}
+        </Select2>
+        <Input label="Photo URL (optionnel)" value={form.photo_url} onChange={e=>upd('photo_url',e.target.value)} placeholder="https://..."/>
+      </div>
+      <div style={{marginTop:14}}>
+        <label style={{display:'block',fontSize:11,color:'var(--text2)',marginBottom:5,fontWeight:600,letterSpacing:.3,textTransform:'uppercase'}}>Notes</label>
+        <textarea value={form.notes} onChange={e=>upd('notes',e.target.value)} rows={2} placeholder="Observations, remarques..." style={{resize:'vertical'}}/>
+      </div>
+      <div style={{display:'flex',gap:10,marginTop:20,justifyContent:'flex-end'}}>
+        <button onClick={()=>setModal(m=>({...m,open:false}))} style={{background:'var(--bg3)',color:'var(--text2)',border:'1px solid var(--border)',borderRadius:'var(--r)',padding:'9px 20px',fontFamily:'var(--font)',fontSize:13}}>Annuler</button>
+        <BtnPrimary loading={loading} onClick={handleSubmit}>{modal.mode==='add'?'Ajouter l\'élève':'Enregistrer'}</BtnPrimary>
+      </div>
+    </Modal>
+  </div>;
+}
+
+// ═══════════════════════════════════════════
+//  TAB PLANNING (SEANCES)
+// ═══════════════════════════════════════════
+const SEA_INIT={eleve_id:'',type:'code',date_seance:'',heure_debut:'',heure_fin:'',notes:''};
+
+function TabPlanning({seances,setSeances,eleves,addToast,setSyncing,setSyncErr,isMobile}){
+  const[modal,setModal]=useState({open:false,mode:'add',item:null});
+  const[form,setForm]=useState(SEA_INIT);
+  const[loading,setLoading]=useState(false);
+  const[confirm,setConfirm]=useState({open:false,id:null});
+  const[filter,setFilter]=useState('tous');
+  const upd=(k,v)=>setForm(f=>({...f,[k]:v}));
+
+  const today=new Date().toISOString().split('T')[0];
+  const filtered=useMemo(()=>{
+    if(filter==='aujourd_hui')return seances.filter(s=>s.date_seance===today);
+    if(filter==='a_venir')return seances.filter(s=>s.date_seance>=today);
+    if(filter==='passe')return seances.filter(s=>s.date_seance<today);
+    return seances;
+  },[seances,filter,today]);
+
+  const sorted=[...filtered].sort((a,b)=>new Date(a.date_seance+' '+(a.heure_debut||'00:00'))-new Date(b.date_seance+' '+(b.heure_debut||'00:00')));
+
+  const openAdd=()=>{setForm(SEA_INIT);setModal({open:true,mode:'add',item:null});};
+  const openEdit=(item)=>{setForm({...SEA_INIT,...item});setModal({open:true,mode:'edit',item});};
+
+  const handleSubmit=async()=>{
+    if(!form.eleve_id||!form.date_seance){addToast('Élève et date sont requis.','error');return;}
+    setLoading(true);setSyncing(true);setSyncErr(false);
+    try{
+      if(modal.mode==='add'){const d=await SB.insert('seances',form);setSeances(p=>[d,...p]);addToast('✅ Séance ajoutée !');}
+      else{const d=await SB.update('seances',modal.item.id,form);setSeances(p=>p.map(s=>s.id===d.id?d:s));addToast('✅ Séance mise à jour !');}
+      setModal({open:false,mode:'add',item:null});
+    }catch{setSyncErr(true);addToast('❌ Erreur Supabase.','error');}
+    finally{setLoading(false);setSyncing(false);}
+  };
+
+  const handleDelete=async()=>{
+    if(!confirm.id)return;
+    setLoading(true);
+    try{await SB.remove('seances',confirm.id);setSeances(p=>p.filter(s=>s.id!==confirm.id));addToast('🗑️ Séance supprimée.');}
+    catch{addToast('❌ Erreur.','error');}
+    finally{setLoading(false);setConfirm({open:false,id:null});}
+  };
+
+  const getEleve=(id)=>eleves.find(e=>e.id===id);
+
+  return <div className="fade-up">
+    <Confirm open={confirm.open} msg="Supprimer cette séance ?" onOk={handleDelete} onCancel={()=>setConfirm({open:false,id:null})}/>
+    <div style={{display:'flex',gap:10,marginBottom:16,flexWrap:'wrap',alignItems:'center'}}>
+      <div style={{display:'flex',gap:6,flex:1,flexWrap:'wrap'}}>
+        {[['tous','Toutes'],['aujourd_hui','Aujourd\'hui'],['a_venir','À venir'],['passe','Passées']].map(([v,l])=>(
+          <button key={v} onClick={()=>setFilter(v)} style={{background:filter===v?'var(--green)':'var(--bg3)',color:filter===v?'#fff':'var(--text2)',border:`1px solid ${filter===v?'var(--green)':'var(--border)'}`,borderRadius:20,padding:'5px 14px',fontSize:12,cursor:'pointer',fontWeight:600,fontFamily:'var(--font)'}}>{l}</button>
+        ))}
+      </div>
+      <BtnPrimary onClick={openAdd} style={{whiteSpace:'nowrap'}}>+ Nouvelle séance</BtnPrimary>
+    </div>
+
+    <div style={{background:'var(--card-bg)',border:'1px solid var(--card-border)',borderRadius:'var(--r2)',overflow:'hidden'}}>
+      <div style={{overflowX:'auto'}}>
+        <table style={{width:'100%',borderCollapse:'collapse'}}>
+          <thead>
+            <tr style={{background:'var(--bg3)'}}>
+              {['Date & Heure','Élève','Type','Durée','Notes','Actions'].map(h=>(
+                <th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:11,color:'var(--text3)',fontWeight:700,letterSpacing:.5,textTransform:'uppercase',borderBottom:'1px solid var(--border)',whiteSpace:'nowrap'}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.length===0?<tr><td colSpan={6} style={{padding:32,textAlign:'center',color:'var(--text3)'}}>Aucune séance trouvée.</td></tr>
+            :sorted.map((s,i)=>{
+              const el=getEleve(s.eleve_id);
+              const isPast=s.date_seance<today;
+              return <tr key={s.id} style={{borderBottom:'1px solid var(--border)',opacity:isPast?.6:1,background:i%2===0?'transparent':'var(--bg3)30'}}
+                onMouseEnter={ev=>ev.currentTarget.style.background='var(--green-dim)'}
+                onMouseLeave={ev=>ev.currentTarget.style.background=i%2===0?'transparent':'var(--bg3)30'}>
+                <td style={{padding:'10px 14px'}}>
+                  <div style={{fontWeight:600,fontSize:13,color:s.date_seance===today?'var(--green)':'inherit'}}>{fmtDate(s.date_seance)}</div>
+                  <div style={{fontSize:11,color:'var(--text3)'}}>{s.heure_debut||'—'}{s.heure_fin?' → '+s.heure_fin:''}</div>
+                </td>
+                <td style={{padding:'10px 14px',fontSize:13,fontWeight:500}}>{el?`${el.prenom} ${el.nom}`:'—'}</td>
+                <td style={{padding:'10px 14px'}}><span style={{background:s.type==='code'?'var(--cyan-dim)':'var(--green-dim)',color:s.type==='code'?'var(--cyan)':'var(--green)',borderRadius:20,fontSize:11,fontWeight:700,padding:'2px 10px'}}>{s.type==='code'?'📚 Code':'🚗 Conduite'}</span></td>
+                <td style={{padding:'10px 14px',fontSize:12,color:'var(--text2)'}}>{s.heure_debut&&s.heure_fin?`${Math.round((new Date('2000-01-01T'+s.heure_fin)-new Date('2000-01-01T'+s.heure_debut))/60000)}min`:'—'}</td>
+                <td style={{padding:'10px 14px',fontSize:12,color:'var(--text2)',maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.notes||'—'}</td>
+                <td style={{padding:'10px 14px'}}>
+                  <div style={{display:'flex',gap:6}}>
+                    <button onClick={()=>openEdit(s)} style={{background:'var(--cyan-dim)',color:'var(--cyan)',border:'none',borderRadius:6,padding:'5px 10px',fontSize:11,cursor:'pointer',fontWeight:600}}>✏️</button>
+                    <button onClick={()=>setConfirm({open:true,id:s.id})} style={{background:'var(--red-dim)',color:'var(--red)',border:'none',borderRadius:6,padding:'5px 10px',fontSize:11,cursor:'pointer',fontWeight:600}}>🗑️</button>
+                  </div>
+                </td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <Modal open={modal.open} onClose={()=>setModal(m=>({...m,open:false}))} title={modal.mode==='add'?'➕ Nouvelle séance':'✏️ Modifier la séance'}>
+      <div style={{display:'flex',flexDirection:'column',gap:14}}>
+        <Select2 label="Élève" required value={form.eleve_id} onChange={e=>upd('eleve_id',e.target.value)}>
+          <option value="">-- Sélectionner un élève --</option>
+          {eleves.map(e=><option key={e.id} value={e.id}>{e.prenom} {e.nom}</option>)}
+        </Select2>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+          <Select2 label="Type de séance" value={form.type} onChange={e=>upd('type',e.target.value)}>
+            <option value="code">📚 Code</option>
+            <option value="conduite">🚗 Conduite</option>
+          </Select2>
+          <Input label="Date" required type="date" value={form.date_seance} onChange={e=>upd('date_seance',e.target.value)}/>
+          <Input label="Heure début" type="time" value={form.heure_debut} onChange={e=>upd('heure_debut',e.target.value)}/>
+          <Input label="Heure fin" type="time" value={form.heure_fin} onChange={e=>upd('heure_fin',e.target.value)}/>
+        </div>
+        <div>
+          <label style={{display:'block',fontSize:11,color:'var(--text2)',marginBottom:5,fontWeight:600,letterSpacing:.3,textTransform:'uppercase'}}>Notes</label>
+          <textarea value={form.notes} onChange={e=>upd('notes',e.target.value)} rows={2} style={{resize:'vertical'}} placeholder="Observations sur la séance..."/>
+        </div>
+        <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:6}}>
+          <button onClick={()=>setModal(m=>({...m,open:false}))} style={{background:'var(--bg3)',color:'var(--text2)',border:'1px solid var(--border)',borderRadius:'var(--r)',padding:'9px 20px',fontFamily:'var(--font)',fontSize:13}}>Annuler</button>
+          <BtnPrimary loading={loading} onClick={handleSubmit}>{modal.mode==='add'?'Ajouter':'Enregistrer'}</BtnPrimary>
+        </div>
+      </div>
+    </Modal>
+  </div>;
+}
+
+// ═══════════════════════════════════════════
+//  TAB EXAMENS
+// ═══════════════════════════════════════════
+const EX_INIT={eleve_id:'',type:'code',date_examen:'',tentative_numero:1,resultat:'en_attente',notes:''};
+
+function TabExamens({examens,setExamens,eleves,addToast,setSyncing,setSyncErr,isMobile}){
+  const[modal,setModal]=useState({open:false,mode:'add',item:null});
+  const[form,setForm]=useState(EX_INIT);
+  const[loading,setLoading]=useState(false);
+  const[confirm,setConfirm]=useState({open:false,id:null});
+  const[fRes,setFRes]=useState('');
+  const upd=(k,v)=>setForm(f=>({...f,[k]:v}));
+
+  const filtered=useMemo(()=>fRes?examens.filter(e=>e.resultat===fRes):examens,[examens,fRes]);
+  const sorted=[...filtered].sort((a,b)=>new Date(a.date_examen)-new Date(b.date_examen));
+
+  const openAdd=()=>{setForm(EX_INIT);setModal({open:true,mode:'add',item:null});};
+  const openEdit=(item)=>{setForm({...EX_INIT,...item,tentative_numero:item.tentative_numero||1});setModal({open:true,mode:'edit',item});};
+
+  const handleSubmit=async()=>{
+    if(!form.eleve_id||!form.date_examen){addToast('Élève et date sont requis.','error');return;}
+    setLoading(true);setSyncing(true);setSyncErr(false);
+    try{
+      if(modal.mode==='add'){const d=await SB.insert('examens',form);setExamens(p=>[d,...p]);addToast('✅ Examen ajouté !');}
+      else{const d=await SB.update('examens',modal.item.id,form);setExamens(p=>p.map(e=>e.id===d.id?d:e));addToast('✅ Examen mis à jour !');}
+      setModal({open:false,mode:'add',item:null});
+    }catch{setSyncErr(true);addToast('❌ Erreur Supabase.','error');}
+    finally{setLoading(false);setSyncing(false);}
+  };
+
+  const handleDelete=async()=>{
+    if(!confirm.id)return;
+    try{await SB.remove('examens',confirm.id);setExamens(p=>p.filter(e=>e.id!==confirm.id));addToast('🗑️ Examen supprimé.');}
+    catch{addToast('❌ Erreur.','error');}
+    finally{setConfirm({open:false,id:null});}
+  };
+
+  const quickResult=async(item,resultat)=>{
+    setSyncing(true);setSyncErr(false);
+    try{
+      const d=await SB.update('examens',item.id,{resultat});
+      setExamens(p=>p.map(e=>e.id===d.id?d:e));
+      addToast(resultat==='recu'?'✅ Résultat : Reçu !':'❌ Résultat : Recalé');
+    }catch{setSyncErr(true);addToast('❌ Erreur.','error');}
+    finally{setSyncing(false);}
+  };
+
+  const getEleve=(id)=>eleves.find(e=>e.id===id);
+  const today=new Date().toISOString().split('T')[0];
+
+  return <div className="fade-up">
+    <Confirm open={confirm.open} msg="Supprimer cet examen ?" onOk={handleDelete} onCancel={()=>setConfirm({open:false,id:null})}/>
+    <div style={{display:'flex',gap:10,marginBottom:16,flexWrap:'wrap',alignItems:'center'}}>
+      <div style={{display:'flex',gap:6,flex:1,flexWrap:'wrap'}}>
+        {[['','Tous'],['en_attente','⏳ En attente'],['recu','✅ Reçus'],['recale','❌ Recalés']].map(([v,l])=>(
+          <button key={v} onClick={()=>setFRes(v)} style={{background:fRes===v?'var(--green)':'var(--bg3)',color:fRes===v?'#fff':'var(--text2)',border:`1px solid ${fRes===v?'var(--green)':'var(--border)'}`,borderRadius:20,padding:'5px 14px',fontSize:12,cursor:'pointer',fontWeight:600,fontFamily:'var(--font)'}}>{l}</button>
+        ))}
+      </div>
+      <BtnPrimary onClick={openAdd} style={{whiteSpace:'nowrap'}}>+ Nouvel examen</BtnPrimary>
+    </div>
+
+    <div style={{background:'var(--card-bg)',border:'1px solid var(--card-border)',borderRadius:'var(--r2)',overflow:'hidden'}}>
+      <div style={{overflowX:'auto'}}>
+        <table style={{width:'100%',borderCollapse:'collapse'}}>
+          <thead>
+            <tr style={{background:'var(--bg3)'}}>
+              {['Élève','Type','Date','J-Jour','Tentative','Résultat','Actions'].map(h=>(
+                <th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:11,color:'var(--text3)',fontWeight:700,letterSpacing:.5,textTransform:'uppercase',borderBottom:'1px solid var(--border)',whiteSpace:'nowrap'}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.length===0?<tr><td colSpan={7} style={{padding:32,textAlign:'center',color:'var(--text3)'}}>Aucun examen trouvé.</td></tr>
+            :sorted.map((ex,i)=>{
+              const el=getEleve(ex.eleve_id);
+              const days=daysUntil(ex.date_examen);
+              const isPast=ex.date_examen<today;
+              return <tr key={ex.id} style={{borderBottom:'1px solid var(--border)',background:i%2===0?'transparent':'var(--bg3)30'}}
+                onMouseEnter={ev=>ev.currentTarget.style.background='var(--green-dim)'}
+                onMouseLeave={ev=>ev.currentTarget.style.background=i%2===0?'transparent':'var(--bg3)30'}>
+                <td style={{padding:'10px 14px',fontWeight:600,fontSize:13}}>{el?`${el.prenom} ${el.nom}`:'—'}</td>
+                <td style={{padding:'10px 14px'}}><span style={{background:ex.type==='code'?'var(--cyan-dim)':'var(--green-dim)',color:ex.type==='code'?'var(--cyan)':'var(--green)',borderRadius:20,fontSize:11,fontWeight:700,padding:'2px 10px'}}>{ex.type==='code'?'📚 Code':'🚗 Conduite'}</span></td>
+                <td style={{padding:'10px 14px',fontSize:12,color:'var(--text2)'}}>{fmtDate(ex.date_examen)}</td>
+                <td style={{padding:'10px 14px'}}>
+                  {isPast?<span style={{color:'var(--text3)',fontSize:11}}>Passé</span>:
+                  <span style={{fontWeight:700,fontSize:12,color:days===0?'var(--red)':days<=3?'var(--orange)':days<=7?'var(--gold)':'var(--green)'}}>
+                    {days===0?'AUJOURD\'HUI':days===1?'DEMAIN':`J-${days}`}
+                  </span>}
+                </td>
+                <td style={{padding:'10px 14px',textAlign:'center'}}><span style={{background:'var(--bg3)',borderRadius:20,fontSize:12,fontWeight:700,padding:'2px 10px',color:'var(--text2)'}}>{ex.tentative_numero||1}ᵉ</span></td>
+                <td style={{padding:'10px 14px'}}><Pill val={ex.resultat} map={RESULTATS}/></td>
+                <td style={{padding:'10px 14px'}}>
+                  <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                    {ex.resultat==='en_attente'&&<>
+                      <button onClick={()=>quickResult(ex,'recu')} style={{background:'var(--green-dim)',color:'var(--green)',border:'none',borderRadius:6,padding:'4px 8px',fontSize:10,cursor:'pointer',fontWeight:700}}>✅ Reçu</button>
+                      <button onClick={()=>quickResult(ex,'recale')} style={{background:'var(--red-dim)',color:'var(--red)',border:'none',borderRadius:6,padding:'4px 8px',fontSize:10,cursor:'pointer',fontWeight:700}}>❌ Recalé</button>
+                    </>}
+                    <button onClick={()=>openEdit(ex)} style={{background:'var(--cyan-dim)',color:'var(--cyan)',border:'none',borderRadius:6,padding:'4px 8px',fontSize:10,cursor:'pointer',fontWeight:600}}>✏️</button>
+                    <button onClick={()=>setConfirm({open:true,id:ex.id})} style={{background:'var(--red-dim)',color:'var(--red)',border:'none',borderRadius:6,padding:'4px 8px',fontSize:10,cursor:'pointer',fontWeight:600}}>🗑️</button>
+                  </div>
+                </td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <Modal open={modal.open} onClose={()=>setModal(m=>({...m,open:false}))} title={modal.mode==='add'?'➕ Nouvel examen':'✏️ Modifier l\'examen'}>
+      <div style={{display:'flex',flexDirection:'column',gap:14}}>
+        <Select2 label="Élève" required value={form.eleve_id} onChange={e=>upd('eleve_id',e.target.value)}>
+          <option value="">-- Sélectionner un élève --</option>
+          {eleves.map(e=><option key={e.id} value={e.id}>{e.prenom} {e.nom} – Cat. {e.categorie_permis}</option>)}
+        </Select2>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+          <Select2 label="Type d'examen" value={form.type} onChange={e=>upd('type',e.target.value)}>
+            <option value="code">📚 Code</option>
+            <option value="conduite">🚗 Conduite</option>
+          </Select2>
+          <Input label="Date de l'examen" required type="date" value={form.date_examen} onChange={e=>upd('date_examen',e.target.value)}/>
+          <Input label="Nᵉ tentative" type="number" min={1} value={form.tentative_numero} onChange={e=>upd('tentative_numero',parseInt(e.target.value)||1)}/>
+          <Select2 label="Résultat" value={form.resultat} onChange={e=>upd('resultat',e.target.value)}>
+            {Object.entries(RESULTATS).map(([k,v])=><option key={k} value={k}>{v.icon} {v.label}</option>)}
+          </Select2>
+        </div>
+        <div>
+          <label style={{display:'block',fontSize:11,color:'var(--text2)',marginBottom:5,fontWeight:600,letterSpacing:.3,textTransform:'uppercase'}}>Notes</label>
+          <textarea value={form.notes} onChange={e=>upd('notes',e.target.value)} rows={2} style={{resize:'vertical'}} placeholder="Observations..."/>
+        </div>
+        <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:6}}>
+          <button onClick={()=>setModal(m=>({...m,open:false}))} style={{background:'var(--bg3)',color:'var(--text2)',border:'1px solid var(--border)',borderRadius:'var(--r)',padding:'9px 20px',fontFamily:'var(--font)',fontSize:13}}>Annuler</button>
+          <BtnPrimary loading={loading} onClick={handleSubmit}>{modal.mode==='add'?'Ajouter':'Enregistrer'}</BtnPrimary>
+        </div>
+      </div>
+    </Modal>
+  </div>;
+}
+
+// ═══════════════════════════════════════════
+//  TAB PAIEMENTS (ADMIN ONLY)
+// ═══════════════════════════════════════════
+const PAI_INIT={eleve_id:'',montant_total:0,acompte:0,solde:0,statut:'impaye',notes:''};
+
+function TabPaiements({paiements,setPaiements,eleves,addToast,setSyncing,setSyncErr,isMobile}){
+  const[modal,setModal]=useState({open:false,mode:'add',item:null});
+  const[form,setForm]=useState(PAI_INIT);
+  const[loading,setLoading]=useState(false);
+  const[confirm,setConfirm]=useState({open:false,id:null});
+  const[fStatut,setFStatut]=useState('');
+  const upd=(k,v)=>setForm(f=>{
+    const nf={...f,[k]:v};
+    if(k==='montant_total'||k==='acompte'){const mt=parseFloat(nf.montant_total)||0;const ac=parseFloat(nf.acompte)||0;nf.solde=Math.max(0,mt-ac);nf.statut=ac===0?'impaye':ac>=mt?'paye':'partiel';}
+    return nf;
+  });
+
+  const filtered=useMemo(()=>fStatut?paiements.filter(p=>p.statut===fStatut):paiements,[paiements,fStatut]);
+  const totalCA=paiements.reduce((s,p)=>s+(parseFloat(p.acompte)||0),0);
+  const totalSolde=paiements.reduce((s,p)=>s+(parseFloat(p.solde)||0),0);
+
+  const openAdd=()=>{setForm(PAI_INIT);setModal({open:true,mode:'add',item:null});};
+  const openEdit=(item)=>{setForm({...PAI_INIT,...item});setModal({open:true,mode:'edit',item});};
+
+  const handleSubmit=async()=>{
+    if(!form.eleve_id){addToast('Veuillez sélectionner un élève.','error');return;}
+    setLoading(true);setSyncing(true);setSyncErr(false);
+    try{
+      if(modal.mode==='add'){const d=await SB.insert('paiements',form);setPaiements(p=>[d,...p]);addToast('✅ Paiement enregistré !');}
+      else{const d=await SB.update('paiements',modal.item.id,form);setPaiements(p=>p.map(x=>x.id===d.id?d:x));addToast('✅ Paiement mis à jour !');}
+      setModal({open:false,mode:'add',item:null});
+    }catch{setSyncErr(true);addToast('❌ Erreur Supabase.','error');}
+    finally{setLoading(false);setSyncing(false);}
+  };
+
+  const handleDelete=async()=>{
+    if(!confirm.id)return;
+    try{await SB.remove('paiements',confirm.id);setPaiements(p=>p.filter(x=>x.id!==confirm.id));addToast('🗑️ Paiement supprimé.');}
+    catch{addToast('❌ Erreur.','error');}
+    finally{setConfirm({open:false,id:null});}
+  };
+
+  const getEleve=(id)=>eleves.find(e=>e.id===id);
+
+  return <div className="fade-up">
+    <Confirm open={confirm.open} msg="Supprimer ce paiement ?" onOk={handleDelete} onCancel={()=>setConfirm({open:false,id:null})}/>
+
+    {/* Summary */}
+    <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr 1fr':'repeat(3,1fr)',gap:14,marginBottom:20}}>
+      <StatCard icon="💵" label="Total encaissé" value={fmtMoney(totalCA)} color="var(--green)"/>
+      <StatCard icon="⏳" label="Solde restant" value={fmtMoney(totalSolde)} color="var(--red)"/>
+      <StatCard icon="📋" label="Fiches paiement" value={paiements.length} color="var(--cyan)"/>
+    </div>
+
+    <div style={{display:'flex',gap:10,marginBottom:16,flexWrap:'wrap',alignItems:'center'}}>
+      <div style={{display:'flex',gap:6,flex:1,flexWrap:'wrap'}}>
+        {[['','Tous'],['paye','✅ Payés'],['partiel','⚠️ Partiels'],['impaye','❌ Impayés']].map(([v,l])=>(
+          <button key={v} onClick={()=>setFStatut(v)} style={{background:fStatut===v?'var(--green)':'var(--bg3)',color:fStatut===v?'#fff':'var(--text2)',border:`1px solid ${fStatut===v?'var(--green)':'var(--border)'}`,borderRadius:20,padding:'5px 14px',fontSize:12,cursor:'pointer',fontWeight:600,fontFamily:'var(--font)'}}>{l}</button>
+        ))}
+      </div>
+      <BtnPrimary onClick={openAdd} style={{whiteSpace:'nowrap'}}>+ Nouveau paiement</BtnPrimary>
+    </div>
+
+    <div style={{background:'var(--card-bg)',border:'1px solid var(--card-border)',borderRadius:'var(--r2)',overflow:'hidden'}}>
+      <div style={{overflowX:'auto'}}>
+        <table style={{width:'100%',borderCollapse:'collapse'}}>
+          <thead>
+            <tr style={{background:'var(--bg3)'}}>
+              {['Élève','Montant total','Acompte versé','Solde restant','Statut','Actions'].map(h=>(
+                <th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:11,color:'var(--text3)',fontWeight:700,letterSpacing:.5,textTransform:'uppercase',borderBottom:'1px solid var(--border)',whiteSpace:'nowrap'}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length===0?<tr><td colSpan={6} style={{padding:32,textAlign:'center',color:'var(--text3)'}}>Aucun paiement trouvé.</td></tr>
+            :filtered.map((p,i)=>{
+              const el=getEleve(p.eleve_id);
+              const pct=p.montant_total>0?Math.min(100,Math.round((p.acompte/p.montant_total)*100)):0;
+              return <tr key={p.id} style={{borderBottom:'1px solid var(--border)',background:i%2===0?'transparent':'var(--bg3)30'}}
+                onMouseEnter={ev=>ev.currentTarget.style.background='var(--green-dim)'}
+                onMouseLeave={ev=>ev.currentTarget.style.background=i%2===0?'transparent':'var(--bg3)30'}>
+                <td style={{padding:'10px 14px'}}>
+                  <div style={{fontWeight:600,fontSize:13}}>{el?`${el.prenom} ${el.nom}`:'—'}</div>
+                  <div style={{height:3,background:'var(--border)',borderRadius:2,marginTop:5,width:80}}>
+                    <div style={{width:`${pct}%`,height:'100%',background:pct>=100?'var(--green)':pct>=50?'var(--gold)':'var(--red)',borderRadius:2,transition:'width .3s'}}/>
+                  </div>
+                </td>
+                <td style={{padding:'10px 14px',fontWeight:600}}>{fmtMoney(p.montant_total)}</td>
+                <td style={{padding:'10px 14px',color:'var(--green)',fontWeight:600}}>{fmtMoney(p.acompte)}</td>
+                <td style={{padding:'10px 14px',color:p.solde>0?'var(--red)':'var(--text3)',fontWeight:600}}>{fmtMoney(p.solde)}</td>
+                <td style={{padding:'10px 14px'}}><Pill val={p.statut} map={STATUTS_PAI}/></td>
+                <td style={{padding:'10px 14px'}}>
+                  <div style={{display:'flex',gap:6}}>
+                    <button onClick={()=>openEdit(p)} style={{background:'var(--cyan-dim)',color:'var(--cyan)',border:'none',borderRadius:6,padding:'5px 10px',fontSize:11,cursor:'pointer',fontWeight:600}}>✏️</button>
+                    <button onClick={()=>setConfirm({open:true,id:p.id})} style={{background:'var(--red-dim)',color:'var(--red)',border:'none',borderRadius:6,padding:'5px 10px',fontSize:11,cursor:'pointer',fontWeight:600}}>🗑️</button>
+                  </div>
+                </td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <Modal open={modal.open} onClose={()=>setModal(m=>({...m,open:false}))} title={modal.mode==='add'?'➕ Nouveau paiement':'✏️ Modifier le paiement'}>
+      <div style={{display:'flex',flexDirection:'column',gap:14}}>
+        <Select2 label="Élève" required value={form.eleve_id} onChange={e=>upd('eleve_id',e.target.value)}>
+          <option value="">-- Sélectionner un élève --</option>
+          {eleves.map(e=><option key={e.id} value={e.id}>{e.prenom} {e.nom}</option>)}
+        </Select2>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+          <Input label="Montant total (FCFA)" type="number" min={0} value={form.montant_total} onChange={e=>upd('montant_total',e.target.value)}/>
+          <Input label="Acompte versé (FCFA)" type="number" min={0} value={form.acompte} onChange={e=>upd('acompte',e.target.value)}/>
+        </div>
+        <div style={{background:'var(--bg3)',borderRadius:'var(--r)',padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <span style={{color:'var(--text2)',fontSize:12}}>Solde restant</span>
+          <span style={{fontWeight:800,fontSize:16,color:form.solde>0?'var(--red)':'var(--green)'}}>{fmtMoney(form.solde)}</span>
+        </div>
+        <Select2 label="Statut paiement" value={form.statut} onChange={e=>upd('statut',e.target.value)}>
+          {Object.entries(STATUTS_PAI).map(([k,v])=><option key={k} value={k}>{v.icon} {v.label}</option>)}
+        </Select2>
+        <div>
+          <label style={{display:'block',fontSize:11,color:'var(--text2)',marginBottom:5,fontWeight:600,letterSpacing:.3,textTransform:'uppercase'}}>Notes</label>
+          <textarea value={form.notes} onChange={e=>upd('notes',e.target.value)} rows={2} style={{resize:'vertical'}} placeholder="Mode de paiement, remarques..."/>
+        </div>
+        <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:6}}>
+          <button onClick={()=>setModal(m=>({...m,open:false}))} style={{background:'var(--bg3)',color:'var(--text2)',border:'1px solid var(--border)',borderRadius:'var(--r)',padding:'9px 20px',fontFamily:'var(--font)',fontSize:13}}>Annuler</button>
+          <BtnPrimary loading={loading} onClick={handleSubmit}>{modal.mode==='add'?'Enregistrer':'Mettre à jour'}</BtnPrimary>
+        </div>
+      </div>
+    </Modal>
+  </div>;
+}
+
+// ═══════════════════════════════════════════
+//  TAB ALERTES
+// ═══════════════════════════════════════════
+function TabAlertes({eleves,examens,paiements,role,setTab}){
+  const alertDays=getAlertDays();
+  const today=new Date().toISOString().split('T')[0];
+
+  const exProchains=examens.filter(e=>e.resultat==='en_attente'&&daysUntil(e.date_examen)>=0&&daysUntil(e.date_examen)<=alertDays).sort((a,b)=>new Date(a.date_examen)-new Date(b.date_examen));
+  const exAujourd=examens.filter(e=>e.resultat==='en_attente'&&e.date_examen===today);
+  const impayes=paiements.filter(p=>p.statut==='impaye');
+  const partiels=paiements.filter(p=>p.statut==='partiel');
+  const prets=eleves.filter(e=>e.statut==='pret_examen');
+  const getEleve=(id)=>eleves.find(e=>e.id===id);
+
+  const AlertCard=({icon,title,count,color,bg,children})=>(
+    <div style={{background:'var(--card-bg)',border:`1px solid ${color}30`,borderRadius:'var(--r2)',overflow:'hidden',marginBottom:16}}>
+      <div style={{padding:'12px 16px',background:`${color}12`,borderBottom:`1px solid ${color}20`,display:'flex',alignItems:'center',gap:10}}>
+        <span style={{fontSize:20}}>{icon}</span>
+        <span style={{fontFamily:'var(--font-cond)',fontWeight:700,fontSize:15,color}}>{title}</span>
+        <span style={{marginLeft:'auto',background:color,color:'#fff',borderRadius:20,fontSize:11,fontWeight:700,padding:'2px 10px'}}>{count}</span>
+      </div>
+      <div style={{padding:16}}>{children}</div>
+    </div>
+  );
+
+  return <div className="fade-up">
+    {exAujourd.length>0&&<AlertCard icon="🚨" title="EXAMENS AUJOURD'HUI" count={exAujourd.length} color="var(--red)">
+      {exAujourd.map(ex=>{const el=getEleve(ex.eleve_id);return <div key={ex.id} style={{padding:'8px 12px',background:'var(--red-dim)',borderRadius:'var(--r)',marginBottom:6,fontSize:13}}>
+        <strong>{el?`${el.prenom} ${el.nom}`:'—'}</strong> — {ex.type==='code'?'Code':'Conduite'} (tentative n°{ex.tentative_numero||1})
+      </div>;})}
+    </AlertCard>}
+
+    {exProchains.length>0&&<AlertCard icon="📅" title={`EXAMENS DANS LES ${alertDays} PROCHAINS JOURS`} count={exProchains.length} color="var(--gold)">
+      <div style={{display:'flex',flexDirection:'column',gap:6}}>
+        {exProchains.map(ex=>{const el=getEleve(ex.eleve_id);const days=daysUntil(ex.date_examen);return <div key={ex.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 12px',background:'var(--bg3)',borderRadius:'var(--r)',fontSize:12}}>
+          <div><strong>{el?`${el.prenom} ${el.nom}`:'—'}</strong> — {ex.type==='code'?'📚 Code':'🚗 Conduite'}</div>
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <span style={{fontSize:11,color:'var(--text3)'}}>{fmtDate(ex.date_examen)}</span>
+            <span style={{fontWeight:700,color:days===0?'var(--red)':days<=3?'var(--orange)':'var(--gold)'}}>{days===0?'AUJOURD\'HUI':days===1?'DEMAIN':`J-${days}`}</span>
+          </div>
+        </div>;})}
+      </div>
+    </AlertCard>}
+
+    {prets.length>0&&<AlertCard icon="🏁" title="ÉLÈVES PRÊTS POUR L'EXAMEN" count={prets.length} color="var(--violet)">
+      <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+        {prets.map(e=><div key={e.id} style={{padding:'6px 12px',background:'var(--violet-dim)',color:'var(--violet)',borderRadius:'var(--r)',fontSize:12,fontWeight:600}}>{e.prenom} {e.nom} — Cat. {e.categorie_permis}</div>)}
+      </div>
+    </AlertCard>}
+
+    {role==='directeur'&&impayes.length>0&&<AlertCard icon="❌" title="PAIEMENTS IMPAYÉS" count={impayes.length} color="var(--red)">
+      <div style={{display:'flex',flexDirection:'column',gap:6}}>
+        {impayes.map(p=>{const el=getEleve(p.eleve_id);return <div key={p.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 12px',background:'var(--bg3)',borderRadius:'var(--r)',fontSize:12}}>
+          <strong>{el?`${el.prenom} ${el.nom}`:'—'}</strong>
+          <span style={{color:'var(--red)',fontWeight:700}}>{fmtMoney(p.montant_total)} dû</span>
+        </div>;})}
+      </div>
+    </AlertCard>}
+
+    {role==='directeur'&&partiels.length>0&&<AlertCard icon="⚠️" title="PAIEMENTS PARTIELS" count={partiels.length} color="var(--gold)">
+      <div style={{display:'flex',flexDirection:'column',gap:6}}>
+        {partiels.map(p=>{const el=getEleve(p.eleve_id);return <div key={p.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 12px',background:'var(--bg3)',borderRadius:'var(--r)',fontSize:12}}>
+          <strong>{el?`${el.prenom} ${el.nom}`:'—'}</strong>
+          <span style={{color:'var(--gold)',fontWeight:700}}>Solde: {fmtMoney(p.solde)}</span>
+        </div>;})}
+      </div>
+    </AlertCard>}
+
+    {exProchains.length===0&&prets.length===0&&(role!=='directeur'||(!impayes.length&&!partiels.length))&&!exAujourd.length&&(
+      <div style={{textAlign:'center',padding:60,color:'var(--text3)'}}>
+        <div style={{fontSize:48,marginBottom:16}}>✅</div>
+        <div style={{fontFamily:'var(--font-cond)',fontSize:18,fontWeight:700}}>Tout est en ordre !</div>
+        <div style={{fontSize:13,marginTop:8}}>Aucune alerte pour le moment.</div>
+      </div>
+    )}
+  </div>;
+}
+
+// ═══════════════════════════════════════════
+//  TAB PARAMETRES (ADMIN ONLY)
+// ═══════════════════════════════════════════
+function TabParametres({addToast,theme,setTheme,onDisconnect}){
+  const creds=getCreds()||{u:'',k:''};
+  const[url,setUrl]=useState(creds.u||'');
+  const[key,setKey]=useState(creds.k||'');
+  const[days,setDays]=useState(getAlertDays());
+  const[showSQL,setShowSQL]=useState(false);
+  const[copied,setCopied]=useState(false);
+
+  const saveParams=()=>{
+    saveAlertDays(days);
+    if(url.trim()&&key.trim()){saveCreds(url.trim(),key.trim());SB.init(url.trim(),key.trim());}
+    addToast('✅ Paramètres sauvegardés !');
+  };
+
+  const copySQL=()=>{navigator.clipboard.writeText(SQL_SCRIPT).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);});};
+
+  return <div className="fade-up" style={{maxWidth:680}}>
+    {/* Theme */}
+    <div style={{background:'var(--card-bg)',border:'1px solid var(--card-border)',borderRadius:'var(--r2)',padding:20,marginBottom:16}}>
+      <div style={{fontFamily:'var(--font-cond)',fontWeight:700,fontSize:15,marginBottom:14}}>🎨 APPARENCE</div>
+      <div style={{display:'flex',gap:12}}>
+        {[['dark','🌙 Mode Sombre'],['light','☀️ Mode Clair']].map(([v,l])=>(
+          <button key={v} onClick={()=>{setTheme(v);saveTheme(v);document.documentElement.setAttribute('data-theme',v);}} style={{flex:1,background:theme===v?'var(--green)':'var(--bg3)',color:theme===v?'#fff':'var(--text2)',border:`1px solid ${theme===v?'var(--green)':'var(--border)'}`,borderRadius:'var(--r)',padding:'10px',fontFamily:'var(--font)',fontSize:13,cursor:'pointer',fontWeight:theme===v?700:400}}>{l}</button>
+        ))}
+      </div>
+    </div>
+
+    {/* Supabase config */}
+    <div style={{background:'var(--card-bg)',border:'1px solid var(--card-border)',borderRadius:'var(--r2)',padding:20,marginBottom:16}}>
+      <div style={{fontFamily:'var(--font-cond)',fontWeight:700,fontSize:15,marginBottom:14}}>🔗 CONFIGURATION SUPABASE</div>
+      <div style={{display:'flex',flexDirection:'column',gap:12}}>
+        <Input label="URL Supabase" value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://xxxx.supabase.co"/>
+        <Input label="Clé publique (anon key)" value={key} onChange={e=>setKey(e.target.value)} type="password" placeholder="eyJhbGci..."/>
+      </div>
+    </div>
+
+    {/* Alertes config */}
+    <div style={{background:'var(--card-bg)',border:'1px solid var(--card-border)',borderRadius:'var(--r2)',padding:20,marginBottom:16}}>
+      <div style={{fontFamily:'var(--font-cond)',fontWeight:700,fontSize:15,marginBottom:14}}>🔔 ALERTES</div>
+      <div style={{display:'flex',alignItems:'center',gap:14}}>
+        <label style={{fontSize:13,color:'var(--text2)',flex:1}}>Alerter pour les examens dans les prochains</label>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <input type="number" min={1} max={30} value={days} onChange={e=>setDays(parseInt(e.target.value)||7)} style={{width:70,textAlign:'center'}}/>
+          <span style={{fontSize:13,color:'var(--text2)'}}>jours</span>
+        </div>
+      </div>
+    </div>
+
+    {/* SQL Script */}
+    <div style={{background:'var(--card-bg)',border:'1px solid var(--card-border)',borderRadius:'var(--r2)',padding:20,marginBottom:16}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+        <div style={{fontFamily:'var(--font-cond)',fontWeight:700,fontSize:15}}>🗄️ SCRIPT SQL SUPABASE</div>
+        <div style={{display:'flex',gap:8}}>
+          <button onClick={copySQL} style={{background:copied?'var(--green-dim)':'var(--bg3)',color:copied?'var(--green)':'var(--text2)',border:'1px solid var(--border)',borderRadius:'var(--r)',padding:'5px 12px',fontSize:11,cursor:'pointer',fontFamily:'var(--font)',fontWeight:600}}>{copied?'✅ Copié !':'📋 Copier'}</button>
+          <button onClick={()=>setShowSQL(!showSQL)} style={{background:'var(--bg3)',color:'var(--text2)',border:'1px solid var(--border)',borderRadius:'var(--r)',padding:'5px 12px',fontSize:11,cursor:'pointer',fontFamily:'var(--font)',fontWeight:600}}>{showSQL?'Masquer':'Afficher'}</button>
+        </div>
+      </div>
+      <p style={{fontSize:12,color:'var(--text3)',marginBottom:8}}>Exécutez ce script dans votre SQL Editor Supabase pour créer toutes les tables nécessaires.</p>
+      {showSQL&&<pre style={{background:'var(--bg)',borderRadius:'var(--r)',padding:12,fontSize:11,overflowX:'auto',color:'var(--green)',fontFamily:'monospace',maxHeight:200,overflowY:'auto',lineHeight:1.5}}>{SQL_SCRIPT}</pre>}
+    </div>
+
+    <div style={{display:'flex',gap:10,justifyContent:'space-between',flexWrap:'wrap'}}>
+      <button onClick={()=>{if(window.confirm('Déconnecter et effacer les identifiants ?')){clearCreds();localStorage.removeItem(ROLE_KEY);window.location.reload();}}} style={{background:'var(--red-dim)',color:'var(--red)',border:'1px solid var(--red)30',borderRadius:'var(--r)',padding:'9px 18px',fontFamily:'var(--font)',fontSize:13,cursor:'pointer',fontWeight:600}}>🔌 Se déconnecter</button>
+      <BtnPrimary onClick={saveParams}>💾 Sauvegarder</BtnPrimary>
+    </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════
+//  APP
+// ═══════════════════════════════════════════
+function App(){
+  const[phase,setPhase]=useState('init');
+  const[role,setRole]=useState(null);
+  const[tab,setTab]=useState('dashboard');
+  const[theme,setTheme]=useState(getTheme());
+  const[isMobile,setIsMobile]=useState(window.innerWidth<768);
+  const[sideOpen,setSideOpen]=useState(window.innerWidth>=768);
+  const[menuOpen,setMenuOpen]=useState(false);
+  const[syncing,setSyncing]=useState(false);
+  const[syncErr,setSyncErr]=useState(false);
+  const[toasts,setToasts]=useState([]);
+  const[eleves,setEleves]=useState([]);
+  const[seances,setSeances]=useState([]);
+  const[examens,setExamens]=useState([]);
+  const[paiements,setPaiements]=useState([]);
+
+  useEffect(()=>{
+    document.documentElement.setAttribute('data-theme',getTheme());
+    const c=getCreds();
+    if(c){SB.init(c.u,c.k);const r=getRole();if(r){setRole(r);setPhase('loading');}else setPhase('role');}
+    else setPhase('setup');
+    const h=()=>{const m=window.innerWidth<768;setIsMobile(m);if(m){setSideOpen(false);setMenuOpen(false);}};
+    window.addEventListener('resize',h);return()=>window.removeEventListener('resize',h);
+  },[]);
+
+  useEffect(()=>{
+    if(phase!=='loading')return;
+    Promise.all([SB.getAll('eleves'),SB.getAll('seances'),SB.getAll('examens'),SB.getAll('paiements')])
+      .then(([el,se,ex,pa])=>{setEleves(el);setSeances(se);setExamens(ex);setPaiements(pa);setPhase('app');})
+      .catch(()=>{addToast('❌ Erreur Supabase. Vérifiez vos clés.','error');setPhase('setup');});
+  },[phase]);
+
+  const addToast=(msg,type='success')=>{const id=uid();setToasts(t=>[...t,{id,msg,type}]);setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),3500);};
+
+  const refreshData=async()=>{
+    setSyncing(true);setSyncErr(false);
+    try{
+      const[el,se,ex,pa]=await Promise.all([SB.getAll('eleves'),SB.getAll('seances'),SB.getAll('examens'),SB.getAll('paiements')]);
+      setEleves(el);setSeances(se);setExamens(ex);setPaiements(pa);
+      addToast('🔄 Données actualisées');
+    }catch{setSyncErr(true);addToast('❌ Erreur de synchronisation.','error');}
+    finally{setTimeout(()=>setSyncing(false),700);}
+  };
+
+  if(phase==='init')return null;
+  if(phase==='setup')return <SetupScreen onConnected={()=>{const r=getRole();if(r){setRole(r);setPhase('loading');}else setPhase('role');}}/>;
+  if(phase==='role')return <RoleScreen onRole={(r)=>{setRole(r);saveRole(r);setPhase('loading');}}/>;
+  if(phase==='loading')return <div style={{height:'100vh',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:16,background:'var(--bg)'}}>
+    <span className="spin" style={{fontSize:40,color:'var(--green)'}}>↻</span>
+    <div style={{fontFamily:'var(--font-cond)',fontSize:16,color:'var(--text3)',letterSpacing:1}}>Chargement des données...</div>
+  </div>;
+
+  const alertCount=()=>{
+    const alertDays=getAlertDays();
+    const today=new Date().toISOString().split('T')[0];
+    let n=examens.filter(e=>e.resultat==='en_attente'&&daysUntil(e.date_examen)>=0&&daysUntil(e.date_examen)<=alertDays).length;
+    n+=eleves.filter(e=>e.statut==='pret_examen').length;
+    if(role==='directeur')n+=paiements.filter(p=>p.statut==='impaye'||p.statut==='partiel').length;
+    return n||null;
+  };
+
+  const TABS=[
+    {id:'dashboard',label:'Vue Générale',icon:'📊'},
+    {id:'eleves',label:'Élèves',icon:'🎓'},
+    {id:'planning',label:'Planning',icon:'📅'},
+    {id:'examens',label:'Examens',icon:'🏁'},
+    ...(role==='directeur'?[{id:'paiements',label:'Paiements',icon:'💰',badge:paiements.filter(p=>p.statut==='impaye').length||null,badgeColor:'var(--red)'}]:[]),
+    {id:'alertes',label:'Alertes',icon:'🔔',badge:alertCount(),badgeColor:'var(--orange)'},
+    ...(role==='directeur'?[{id:'parametres',label:'Paramètres',icon:'⚙️'}]:[]),
+  ];
+
+  const tabLabel=TABS.find(t=>t.id===tab)?.label||'';
+  const tabIcon=TABS.find(t=>t.id===tab)?.icon||'';
+
+  return <div style={{display:'flex',height:'100vh',background:'var(--bg)',overflow:'hidden'}}>
+    <Toast toasts={toasts}/>
+
+    {/* Mobile overlay */}
+    {isMobile&&menuOpen&&<div onClick={()=>setMenuOpen(false)} style={{position:'fixed',inset:0,background:'#000a',zIndex:400}}/>}
+
+    {/* SIDEBAR */}
+    <div style={{width:sideOpen?230:60,background:'var(--bg2)',borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column',transition:'width .2s ease',overflow:'hidden',flexShrink:0,position:isMobile?'fixed':'relative',zIndex:isMobile?500:1,height:'100vh',left:0,top:0,transform:isMobile&&!menuOpen?'translateX(-100%)':'translateX(0)'}}>
+      {/* Logo */}
+      <div style={{padding:sideOpen?'18px 16px 14px':'14px 0',borderBottom:'1px solid var(--border)',textAlign:sideOpen?'left':'center',flexShrink:0}}>
+        {sideOpen?(
+          <div>
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:6}}>
+              <div style={{width:36,height:36,borderRadius:'50%',overflow:'hidden',flexShrink:0,background:'var(--bg3)',border:'2px solid var(--green)'}}>
+                <img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCACAAIADASIAAhEBAxEB/8QAGwAAAgMBAQEAAAAAAAAAAAAABQYEBwMCAQD/xAA6EAABAwIEAwUGBAYDAQAAAAABAAIDBBEFEiExBkFREyJhcYGRobHBBxQyQlLR8CRicoKS4fEzFf/EABgBAQEBAQEAAAAAAAAAAAAAAAABAgME/8QAHhEBAQEBAQEBAAMAAAAAAAAAAAERAhIhIjFR/9oADAMBAAIRAxEAPwDnlquXpIhiJGUF5GKFXpWgFaC1eS5pDmktI3B0KiJXO25tVq0mfBNJiIBW7XjKHDaGJGXMmjcAkC7w+3VQurMQY6VucbhQ3v8ADJIGy5OkINZjkY3lz96jFLmADvdALiXHqU2p8UrqR4LFMF7DkbS/mIGi1nkJ0UBp3Zc2+i9bJ4JNOi5I07ZIXDsiqpY89zzNS0gkA7t21+CaqF1Zb3WN8qj6KpSm4OxnuuKi7FSwSNsXAbHZSJBaxU7YicuzBxWQ+xDjqFqQrU84sV0UqFIqP21QoZkZ9yoVJxo3sVtIiJGaBVMjivvTCqbYhSYsIXvKFI3iBCj38rHoYcpa4bHxVjbVtm2SHimlMaWoSJpXVWC9jkNvEFBH5TXjqyiXhHVj78BZxTmQg5ZqaR+YEXDSQ3TxF1DlnDJMjhlJ32WcVqJW4VPInHSoStmG1V0vw0A4r2VllN1LapYxZ0hO1gsa1WkIudyNFsN0GwSXcRqsHzE9VVLsJblMjmkPOHKkDSXUqq3K3MrmFYclRbG0jlqIJDZw0CtYC1cSiAHJYEBBFiQO8Ks3cVPVj2JBzWGrM0E+SLVsgN8o1Wq2kGYOYfTVNjrRWCQMJ2VFgSbWWfUE2LgNgFIHlbzO0Cla6xDeYqXlZ5wA3IHXlJN1GfPJp2skMggCwBuV0EHiPaFy4mXK0A3Kq+bLYC97FWW2JJPFN8rAdxqVoGk3bZaFBJazRsqCXMCpUBjlkFiSxZ0R3Hkm0aBrRtupHmtWgC5HRVbhfceq52yBR3H9+Sr+iZoMjnENZ2cBub6kKxuiUTytyN3OgU7CnbBYqNqJo43Eu2AVMg5pJnuIzEDy0UVFNJDIC3cX0VxdoFWwlvnGvVY1Q+j5ELkdLcuVN3fGqNZ8oIByPNlF7i7bnTVWN5IjjDntvlG6rU9sMZsXhrWk3tuVZp6P0bI3AW0JCj1aJy10A4lxv0XkE7JJ3xuvZhOpWDU07nPc2NjnX3Ci1FDNFUPa4XXxIRl5o6gOjA3hkFiF7DTt9lGXNbq7TVKpJILZ3DILm53I6rqmmH7Rc71LyVG6RVFP4X7AXQnwH5J/wAWpuL3Wx+oXuWfQ3iFgTqN0SpHFua7RopkcoRm9MCtHE7wNe7b3SjM5tXTrW5mOCOvGHQvLfKFgzTkb2t1r43AOYjqFJbGQ3K7bRK34Ql6JqBhbHYJnV8FuY6lVkxGaJ4ka57XDcFWq7IQAQ7RwO4QulhS6nqTFBBmBJRWnjjqmBsxyjxOcqLWTNy2vc2v3K94fxRO2oEDpQ+NxI5TY7DVKR4Y4yGQ+gk+9yfVWmkfTTOaHNy66hZbPiTo7JjUbBrOoQSnZJe5Y0b7qLUVQZpGsc7Lf52VinmkjkDo3ODh0KnzIyOFxuTqpNJFuS8XQqnglLi5jyS3oqySAQNVIiO96w5G1iRoqa4C1lrRxjMCDoQqxpqoSEtPk2TGgqmCoa0khuarRztlhJad+iqjKHhLXjRxsfHopVYVuqGjLfRRoGB0bQ4W5d1LneLtGijzN5WQkbJ3TSjnbgaFUlzpCz5bBW7oiwrPiqn5bnor0YBa4OaCQmcEYJbfRKpMxF7ao/RzO5bhxIBOyVVEcrA9pBBFibhZp+ieoqS51OXhyp3qRNTjLlLSAqpLIADfYqOajdpuFL4dh56W7JFuqnCpjkiMkLnMGpsDcJ1TUNY8hj2aHoqMrZITYAgWuojqF5Y4e14jLi43B3bsobjmjI2VoaXHunz6Z2xO46b2VQq6dpaQ5oJ6FcOfEXXJNz1VXiVRNFHJFHL4eXxNI6rPQbq6fkNNiMMoflMgcO9bRE8ZqWjIdCE1o6+NzgHPJNr5dCjVEQXpB2VlIoqiKobmY4X6BRK+llc0lrCT1VkxuaE2eCFkVRTPMge2x1B6KhqJFJjDhYlKIJXguZM4NG17quPfNG0OzAKKyZjJXMDrFOaHD5agZg0gdVMpsCppKjL2YaRqUXgwmIHwsB6hf1BO1V1BiFbPqrTAIYS0g3sLJ/h+GGhqzLFHd1rnQre0U9RJLFJM5w7MWCsxkNjkZo8k+UbFLp9PTjNFJFl73uFC4r2bhJr9dVn01PVNeBJkYL36LUqaOSofmkOvM4K5aJwL9YRwj3L7jPa1JdJM97S04LvbKnR1sUt2nxEnqDcEe6nQ8TqYzlHiHQqPU8OlqcxykZjspTJT7x/Y1hJuM3iiw1B6J3SY3VAtY5+YdCFX8YoIaVjnRnxOO66cFrohHJZpzNGXyS1VFVyVgfHMxzXi9hrso7qgNfodCmqZcEjbqJVt5oAJPQKBNJyyuDtbppXt3V+lkZ8FJB5BpuovBaGZxA2G6IVrJ4agFjiw9VMQXB2YXaE7OMwuiVQxoFgbqpS1IjN9VsxTuI0zKFVSXzXaSCOi0WkjJqW22B0HvRWoKXK0SNFlHlAsCdFBrqpjGF2bUJvPIXtJGijxUlRNJkDTlHVHYP/9k=" alt="Le Patron" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+              </div>
+              <div>
+                <div style={{fontFamily:'var(--font-cond)',fontWeight:900,fontSize:15,letterSpacing:.5}}>LE PATRON</div>
+                <div style={{fontSize:10,color:'var(--green)',fontWeight:600,letterSpacing:1}}>AUTO-ÉCOLE</div>
+              </div>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:6}}>
+              <span className="live"/>
+              <span style={{fontSize:10,color:'var(--text3)'}}>{role==='directeur'?'👔 Directeur':'👨‍🏫 Moniteur'}</span>
+            </div>
+          </div>
+        ):<div style={{fontFamily:'var(--font-cond)',fontWeight:900,fontSize:17,color:'var(--green)'}}>LP</div>}
+      </div>
+
+      {/* Nav */}
+      <nav style={{flex:1,padding:'10px 6px',overflowY:'auto'}}>
+        {TABS.map(t=>{
+          const active=tab===t.id;
+          return <div key={t.id} onClick={()=>{setTab(t.id);if(isMobile){setMenuOpen(false);}}}
+            style={{display:'flex',alignItems:'center',gap:10,padding:sideOpen?'10px 14px':'10px 0',justifyContent:sideOpen?'flex-start':'center',cursor:'pointer',borderRadius:'var(--r)',margin:'2px 2px',background:active?'var(--green-dim)':'transparent',color:active?'var(--green)':'var(--text3)',fontWeight:active?700:400,borderLeft:active&&sideOpen?'3px solid var(--green)':'3px solid transparent',transition:'all .15s',whiteSpace:'nowrap'}}
+            onMouseEnter={e=>{if(!active)e.currentTarget.style.background='var(--bg3)';}}
+            onMouseLeave={e=>{if(!active)e.currentTarget.style.background='transparent';}}>
+            <span style={{fontSize:16,flexShrink:0}}>{t.icon}</span>
+            {sideOpen&&<span style={{fontSize:13,flex:1}}>{t.label}</span>}
+            {sideOpen&&t.badge&&<span style={{background:t.badgeColor||'var(--red)',color:'#fff',borderRadius:10,fontSize:10,fontWeight:700,padding:'1px 6px'}}>{t.badge}</span>}
+          </div>;
+        })}
+      </nav>
+
+      {/* Collapse btn */}
+      <div style={{padding:'8px 6px',borderTop:'1px solid var(--border)',flexShrink:0}}>
+        <div onClick={()=>setSideOpen(!sideOpen)} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 14px',cursor:'pointer',color:'var(--text3)',borderRadius:'var(--r)',justifyContent:sideOpen?'flex-start':'center',transition:'background .15s'}}
+          onMouseEnter={e=>e.currentTarget.style.background='var(--bg3)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+          <span style={{fontSize:12}}>{sideOpen?'◀':'▶'}</span>
+          {sideOpen&&<span style={{fontSize:11}}>Réduire</span>}
+        </div>
+      </div>
+    </div>
+
+    {/* MAIN */}
+    <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+      {/* TopBar */}
+      <div style={{padding:isMobile?'8px 12px':'12px 24px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between',background:'var(--bg2)',flexShrink:0,gap:10,flexWrap:isMobile?'wrap':'nowrap'}}>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          {isMobile&&<button onClick={()=>setMenuOpen(!menuOpen)} style={{background:'var(--bg3)',color:'var(--text)',border:'1px solid var(--border)',borderRadius:'var(--r)',padding:'6px 10px',cursor:'pointer',fontSize:16}}>☰</button>}
+          <span style={{fontFamily:'var(--font-cond)',fontSize:isMobile?14:18,fontWeight:700,letterSpacing:.3}}>{tabIcon} {tabLabel}</span>
+        </div>
+        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+          <SyncDot syncing={syncing} err={syncErr} onRefresh={refreshData}/>
+          {!isMobile&&<span style={{fontSize:11,color:'var(--text3)'}}>{eleves.length} élèves · {new Date().toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})}</span>}
+          <button onClick={()=>{const t=theme==='dark'?'light':'dark';setTheme(t);saveTheme(t);document.documentElement.setAttribute('data-theme',t);}} style={{background:'var(--bg3)',color:'var(--text2)',border:'1px solid var(--border)',borderRadius:'var(--r)',padding:'5px 10px',fontSize:13,cursor:'pointer'}}>
+            {theme==='dark'?'☀️':'🌙'}
+          </button>
+          {!isMobile&&<button onClick={()=>{localStorage.removeItem(ROLE_KEY);setRole(null);setPhase('role');}} style={{background:'var(--bg3)',color:'var(--text3)',border:'1px solid var(--border)',borderRadius:'var(--r)',padding:'5px 10px',fontSize:11,cursor:'pointer'}}>Changer de rôle</button>}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="mobile-main" style={{flex:1,overflowY:'auto',overflowX:'hidden',padding:isMobile?10:24}}>
+        {tab==='dashboard'&&<TabDashboard eleves={eleves} examens={examens} paiements={paiements} setTab={setTab} isMobile={isMobile} role={role}/>}
+        {tab==='eleves'&&<TabEleves eleves={eleves} setEleves={setEleves} addToast={addToast} setSyncing={setSyncing} setSyncErr={setSyncErr} isMobile={isMobile}/>}
+        {tab==='planning'&&<TabPlanning seances={seances} setSeances={setSeances} eleves={eleves} addToast={addToast} setSyncing={setSyncing} setSyncErr={setSyncErr} isMobile={isMobile}/>}
+        {tab==='examens'&&<TabExamens examens={examens} setExamens={setExamens} eleves={eleves} addToast={addToast} setSyncing={setSyncing} setSyncErr={setSyncErr} isMobile={isMobile}/>}
+        {tab==='paiements'&&role==='directeur'&&<TabPaiements paiements={paiements} setPaiements={setPaiements} eleves={eleves} addToast={addToast} setSyncing={setSyncing} setSyncErr={setSyncErr} isMobile={isMobile}/>}
+        {tab==='alertes'&&<TabAlertes eleves={eleves} examens={examens} paiements={paiements} role={role} setTab={setTab}/>}
+        {tab==='parametres'&&role==='directeur'&&<TabParametres addToast={addToast} theme={theme} setTheme={setTheme}/>}
+      </div>
+    </div>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
