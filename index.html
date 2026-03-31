@@ -1371,6 +1371,14 @@ function App(){
             {sideOpen&&t.badge&&<span style={{background:t.badgeColor||'var(--red)',color:'#fff',borderRadius:10,fontSize:10,fontWeight:700,padding:'1px 6px'}}>{t.badge}</span>}
           </div>;
         })}
+        {/* Return to role selection */}
+        <div onClick={()=>{setPhase('role');if(isMobile){setMenuOpen(false);}}}
+          style={{display:'flex',alignItems:'center',gap:10,padding:sideOpen?'10px 14px':'10px 0',justifyContent:sideOpen?'flex-start':'center',cursor:'pointer',borderRadius:'var(--r)',margin:'2px 2px',background:'transparent',color:'var(--text3)',fontWeight:400,transition:'all .15s',whiteSpace:'nowrap'}}
+          onMouseEnter={e=>e.currentTarget.style.background='var(--bg3)'}
+          onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+          <span style={{fontSize:16,flexShrink:0}}>🔙</span>
+          {sideOpen&&<span style={{fontSize:13,flex:1}}>Retour à la page de choix</span>}
+        </div>
       </nav>
 
       {/* Collapse btn */}
@@ -1393,11 +1401,11 @@ function App(){
         </div>
         <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
           <SyncDot syncing={syncing} err={syncErr} onRefresh={refreshData}/>
+          <button onClick={refreshData} disabled={syncing} style={{background:'var(--bg3)',color:'var(--text2)',border:'1px solid var(--border)',borderRadius:'var(--r)',padding:'5px 10px',fontSize:11,cursor:'pointer',opacity:syncing?.5:1}} title="Relancer la synchronisation">🔄 Relancer</button>
           {!isMobile&&<span style={{fontSize:11,color:'var(--text3)'}}>{eleves.length} élèves · {new Date().toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})}</span>}
           <button onClick={()=>{const t=theme==='dark'?'light':'dark';setTheme(t);saveTheme(t);document.documentElement.setAttribute('data-theme',t);}} style={{background:'var(--bg3)',color:'var(--text2)',border:'1px solid var(--border)',borderRadius:'var(--r)',padding:'5px 10px',fontSize:13,cursor:'pointer'}}>
             {theme==='dark'?'☀️':'🌙'}
           </button>
-          {!isMobile&&<button onClick={()=>{localStorage.removeItem(ROLE_KEY);setRole(null);setPhase('role');}} style={{background:'var(--bg3)',color:'var(--text3)',border:'1px solid var(--border)',borderRadius:'var(--r)',padding:'5px 10px',fontSize:11,cursor:'pointer'}}>Changer de rôle</button>}
         </div>
       </div>
 
